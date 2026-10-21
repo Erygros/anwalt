@@ -5,25 +5,478 @@ import { ArrowLeft, ArrowRight, Check, Upload, LockKeyhole } from 'lucide-react'
 import { practices } from '@/lib/content';
 import { icons } from './ui';
 import { post } from '@/lib/client-api';
-type Props={initialPractice:string;live:boolean;uploads:boolean;auth:boolean};
-export function IntakeWizard({initialPractice,live,uploads,auth}:Props) {
-  const [step,setStep]=useState(0);const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [caseId,setCaseId]=useState<string>();const [files,setFiles]=useState<{id:string;name:string}[]>([]);const [result,setResult]=useState<{reference:string;id:string}>();const [verified,setVerified]=useState(false);
-  const [form,setForm]=useState({practice:initialPractice||'',subject:'',urgency:'normal',facts:'',deadline:'',opponent:'',fullName:'',phone:'',company:'',acknowledged:false});
-  const panel=useRef<HTMLDivElement>(null);const field=(key:keyof typeof form,value:string|boolean)=>setForm(f=>({...f,[key]:value}));
-  const move=(next:number)=>{setError('');setStep(next);panel.current?.focus();panel.current?.scrollIntoView({behavior:'smooth',block:'start'});};
-  async function verify(){setBusy(true);setError('');try{const r=await fetch('/api/session');const s=await r.json();if(!s.authenticated||s.staff)throw new Error('Bitte melden Sie sich mit einem bestätigten Mandantenkonto an.');setVerified(true);}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
-  function next(){if(step===0&&!form.practice){setError('Bitte wählen Sie ein Rechtsgebiet oder „Noch unklar“.');return;}if(step===1&&form.subject.trim().length<5){setError('Bitte beschreiben Sie Ihr Anliegen in mindestens fünf Zeichen.');return;}if(step===2&&(form.facts.trim().length<30||form.opponent.trim().length<2)){setError('Bitte beschreiben Sie den Sachverhalt mit mindestens 30 Zeichen und nennen Sie die beteiligten Personen oder „unbekannt“.');return;}if(step===4&&(form.fullName.trim().length<3||!verified)){setError('Bitte geben Sie Ihren Namen an und bestätigen Sie Ihre Anmeldung.');return;}move(step+1);}
-  async function upload(file:File){setBusy(true);setError('');try{if(!verified)throw new Error('Bitte melden Sie sich zuerst an und klicken Sie auf „Anmeldung prüfen“.');let id=caseId;if(!id){const draft=await post<{id:string}>('intake/draft',{practice:form.practice});id=draft.id;setCaseId(id);}const body=new FormData();body.append('caseId',id);body.append('file',file);const response=await fetch('/api/documents/upload',{method:'POST',body});const data=await response.json();if(!response.ok)throw new Error(data.error);setFiles(f=>[...f,data]);}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
-  async function submit(){setBusy(true);setError('');try{if(!form.acknowledged)throw new Error('Bitte bestätigen Sie den Hinweis zur Mandatsannahme und zu Fristen.');const r=await post<{reference:string;id:string}>('intake',{...form,id:caseId,deadline:form.deadline||null});setResult(r);}catch(e){setError((e as Error).message);}finally{setBusy(false);}}
-  const login=<div className="notice"><p>Für vertrauliche Unterlagen und das Absenden benötigen Sie eine bestätigte E-Mail-Adresse.</p><div className="form-actions"><Link className="small-button" href="/mandantenbereich" target="_blank" rel="noopener">Anmelden / Konto erstellen ↗</Link><button type="button" className="small-button" onClick={verify} disabled={busy||!auth}>{verified?'✓ Anmeldung bestätigt':'Anmeldung prüfen'}</button></div><p className="privacy-meta">Die Anmeldung öffnet sich in einem neuen Tab. Kehren Sie anschließend zu dieser Anfrage zurück. Ihre Eingaben bleiben nur in diesem geöffneten Formular.</p></div>;
-  if(result)return <div className="form-card"><div className="eyebrow"><Check size={16}/>Anfrage übermittelt</div><h2>Ihre Anfrage ist eingegangen.</h2><p>Ihre Vorgangsnummer: <strong>{result.reference}</strong></p><div className="notice">Die Kanzlei prüft Ihre Anfrage und mögliche Interessenkonflikte. Ein Mandat entsteht erst durch ausdrückliche Annahme. Diese Bestätigung wahrt keine Fristen.</div><Link href={`/portal/akten/${result.id}`} className="button">Anfrage im Mandantenbereich öffnen<ArrowRight size={17}/></Link></div>;
-  return <div className="form-shell"><div className="wizard-progress" aria-label={`Schritt ${step+1} von 6`}>{['Rechtsgebiet','Anliegen','Sachverhalt','Unterlagen','Kontakt','Prüfen'].map((s,i)=><div key={s} className={i===step?'current':i<step?'done':''} aria-current={i===step?'step':undefined}><b>{i<step?'✓':`0${i+1}`}</b>{s}</div>)}</div><div className="form-card" ref={panel} tabIndex={-1}>
-    {step===0&&<><h2>Worum geht es bei Ihnen?</h2><p>Wählen Sie den Bereich, der am ehesten passt.</p><div className="choice-grid">{practices.map(p=>{const Icon=icons[p.icon];return <button type="button" key={p.slug} onClick={()=>field('practice',p.slug)} className={`choice ${form.practice===p.slug?'selected':''}`} aria-pressed={form.practice===p.slug}><Icon size={25}/><span>{p.title}<small>{p.tag}</small></span></button>;})}</div><button type="button" className={`choice ${form.practice==='unklar'?'selected':''}`} onClick={()=>field('practice','unklar')} aria-pressed={form.practice==='unklar'}><span>Noch unklar<small>Ich möchte meinen Fall zunächst schildern.</small></span></button></>}
-    {step===1&&<><h2>Was möchten Sie klären?</h2><p>Eine kurze Beschreibung reicht für den Einstieg.</p><div className="form-field"><label htmlFor="subject">Ihr Anliegen in einem Satz *</label><input id="subject" value={form.subject} maxLength={180} onChange={e=>field('subject',e.target.value)} placeholder="Zum Beispiel: Vorladung wegen eines Betrugsvorwurfs" required/></div><div className="form-field"><label htmlFor="urgency">Wie dringend ist die Anfrage?</label><select id="urgency" value={form.urgency} onChange={e=>field('urgency',e.target.value)}><option value="normal">Keine bekannte kurzfristige Frist</option><option value="zeitnah">Zeitnah – eine Frist ist bekannt</option><option value="dringend">Dringend – kurzfristiger Handlungsbedarf</option></select></div><div className="notice">Auch eine als dringend markierte Anfrage löst keinen Bereitschaftsdienst aus. Eine Übernahme muss ausdrücklich bestätigt werden.</div></>}
-    {step===2&&<><h2>Was ist passiert?</h2><p>Beschreiben Sie die Ereignisse in zeitlicher Reihenfolge. Juristische Formulierungen sind nicht nötig.</p><div className="form-field"><label htmlFor="facts">Ihr Sachverhalt * (mindestens 30 Zeichen)</label><textarea id="facts" value={form.facts} maxLength={20000} onChange={e=>field('facts',e.target.value)} placeholder="Was ist passiert? Welche Schreiben liegen vor? Was möchten Sie erreichen?" required/><small>Bitte keine Passwörter, PINs oder TANs eintragen.</small></div><div className="form-field"><label htmlFor="opponent">Beteiligte Personen / Unternehmen *</label><textarea id="opponent" style={{minHeight:85}} value={form.opponent} maxLength={1500} onChange={e=>field('opponent',e.target.value)} placeholder="Namen der Gegenseite und weiterer Beteiligter; falls nicht bekannt: unbekannt" required/><small>Diese Angabe hilft bei der Prüfung möglicher Interessenkonflikte.</small></div><div className="form-field"><label htmlFor="deadline">Bekannte Frist (optional)</label><input type="date" id="deadline" value={form.deadline} onChange={e=>field('deadline',e.target.value)}/><small>Bitte das konkrete Datum nennen. Die Anfrage selbst wahrt keine Frist.</small></div></>}
-    {step===3&&<><h2>Welche Unterlagen liegen vor?</h2><p>Sie können Unterlagen beifügen oder die Anfrage ohne Dateien fortsetzen.</p>{!verified&&login}{uploads&&live?<div className="file-zone"><Upload size={25}/><p>PDF, JPG, PNG oder TXT · bis 10 MB pro Datei</p><label htmlFor="documents" className="field-label">Unterlage zur Sicherheitsprüfung auswählen</label><input id="documents" type="file" accept=".pdf,.jpg,.jpeg,.png,.txt" disabled={busy||!verified} onChange={e=>{const f=e.target.files?.[0];if(f)void upload(f);e.target.value='';}}/><small>Eine Datei wird erst nach erfolgreicher Schadsoftwareprüfung gespeichert.</small></div>:<div className="notice">Der sichere Upload ist noch nicht freigeschaltet. Sie können ohne Dateien fortfahren.</div>}{files.length>0&&<ul className="file-list">{files.map(f=><li key={f.id}><span>{f.name}</span><span><Check size={14}/> Geprüft</span></li>)}</ul>}</>}
-    {step===4&&<><h2>Wie dürfen wir Sie ansprechen?</h2><p>Die Eingangsbestätigung geht an die bestätigte E-Mail-Adresse Ihres Kontos.</p>{login}<div className="form-field"><label htmlFor="fullName">Vor- und Nachname *</label><input id="fullName" autoComplete="name" value={form.fullName} maxLength={150} onChange={e=>field('fullName',e.target.value)} required/></div><div className="form-row"><div className="form-field"><label htmlFor="phone">Telefon (optional)</label><input type="tel" id="phone" autoComplete="tel" value={form.phone} maxLength={50} onChange={e=>field('phone',e.target.value)}/></div><div className="form-field"><label htmlFor="company">Unternehmen (optional)</label><input id="company" autoComplete="organization" value={form.company} maxLength={180} onChange={e=>field('company',e.target.value)}/></div></div></>}
-    {step===5&&<><h2>Ist alles richtig?</h2><p>Prüfen Sie Ihre Angaben vor dem Übermitteln.</p><dl className="summary-list"><dt>Rechtsgebiet</dt><dd>{practices.find(p=>p.slug===form.practice)?.title||'Noch unklar'}</dd><dt>Anliegen</dt><dd>{form.subject}</dd><dt>Dringlichkeit</dt><dd>{{normal:'Keine kurzfristige Frist',zeitnah:'Zeitnah',dringend:'Dringend'}[form.urgency]}</dd><dt>Sachverhalt</dt><dd>{form.facts}</dd><dt>Beteiligte</dt><dd>{form.opponent}</dd><dt>Frist</dt><dd>{form.deadline||'Keine angegeben'}</dd><dt>Unterlagen</dt><dd>{files.map(f=>f.name).join(', ')||'Keine beigefügt'}</dd><dt>Kontakt</dt><dd>{form.fullName}<br/>{form.phone}<br/>{form.company}</dd></dl><div className="notice"><strong>Wichtig vor dem Absenden</strong><p>Ihre Anfrage begründet noch kein angenommenes Mandat und hat keine fristwahrende Wirkung. Die Kanzlei prüft die Anfrage und mögliche Interessenkonflikte vor einer ausdrücklichen Mandatsannahme. Das Absenden löst keine Zahlung aus.</p></div><label className="checkbox-line"><input type="checkbox" checked={form.acknowledged} onChange={e=>field('acknowledged',e.target.checked)}/><span>Ich habe den Hinweis zur Mandatsannahme und zu Fristen gelesen. Die <Link href="/datenschutz" target="_blank">Datenschutzhinweise</Link> habe ich zur Kenntnis genommen.</span></label></>}
-    {error&&<div className="notice error" role="alert">{error}</div>}<div className="form-actions">{step>0?<button className="small-button" type="button" onClick={()=>move(step-1)} disabled={busy}><ArrowLeft size={12} style={{display:'inline',marginRight:7}}/>Zurück</button>:<span/>}{step<5?<button type="button" className="button" onClick={next} disabled={busy}>Weiter<ArrowRight size={16}/></button>:<button type="button" className="button" onClick={submit} disabled={busy||!live||!form.acknowledged}>{busy?'Wird übermittelt …':'Anfrage verbindlich übermitteln'}<ArrowRight size={16}/></button>}</div>{!live&&<p className="privacy-meta">Die Kanzlei befindet sich in Vorbereitung. Das Übermitteln ist noch nicht freigeschaltet.</p>}<p className="privacy-meta"><LockKeyhole size={12} style={{display:'inline',marginRight:5}}/>Ihre Eingaben werden nicht in Browser-Tracking oder Analysewerkzeuge übertragen.</p>
-  </div></div>;
+type Props = { initialPractice: string; live: boolean; uploads: boolean; auth: boolean };
+export function IntakeWizard({ initialPractice, live, uploads, auth }: Props) {
+  const [step, setStep] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [caseId, setCaseId] = useState<string>();
+  const [files, setFiles] = useState<{ id: string; name: string }[]>([]);
+  const [result, setResult] = useState<{ reference: string; id: string }>();
+  const [verified, setVerified] = useState(false);
+  const [form, setForm] = useState({
+    practice: initialPractice || '',
+    subject: '',
+    urgency: 'normal',
+    facts: '',
+    deadline: '',
+    opponent: '',
+    fullName: '',
+    phone: '',
+    company: '',
+    acknowledged: false,
+  });
+  const panel = useRef<HTMLDivElement>(null);
+  const field = (key: keyof typeof form, value: string | boolean) =>
+    setForm((f) => ({ ...f, [key]: value }));
+  const move = (next: number) => {
+    setError('');
+    setStep(next);
+    panel.current?.focus();
+    panel.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+  async function verify() {
+    setBusy(true);
+    setError('');
+    try {
+      const r = await fetch('/api/session');
+      const s = await r.json();
+      if (!s.authenticated || s.staff)
+        throw new Error('Bitte melden Sie sich mit einem bestätigten Mandantenkonto an.');
+      setVerified(true);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  function next() {
+    if (step === 0 && !form.practice) {
+      setError('Bitte wählen Sie ein Rechtsgebiet oder „Noch unklar“.');
+      return;
+    }
+    if (step === 1 && form.subject.trim().length < 5) {
+      setError('Bitte beschreiben Sie Ihr Anliegen in mindestens fünf Zeichen.');
+      return;
+    }
+    if (step === 2 && (form.facts.trim().length < 30 || form.opponent.trim().length < 2)) {
+      setError(
+        'Bitte beschreiben Sie den Sachverhalt mit mindestens 30 Zeichen und nennen Sie die beteiligten Personen oder „unbekannt“.',
+      );
+      return;
+    }
+    if (step === 4 && (form.fullName.trim().length < 3 || !verified)) {
+      setError('Bitte geben Sie Ihren Namen an und bestätigen Sie Ihre Anmeldung.');
+      return;
+    }
+    move(step + 1);
+  }
+  async function upload(file: File) {
+    setBusy(true);
+    setError('');
+    try {
+      if (!verified)
+        throw new Error('Bitte melden Sie sich zuerst an und klicken Sie auf „Anmeldung prüfen“.');
+      let id = caseId;
+      if (!id) {
+        const draft = await post<{ id: string }>('intake/draft', { practice: form.practice });
+        id = draft.id;
+        setCaseId(id);
+      }
+      const body = new FormData();
+      body.append('caseId', id);
+      body.append('file', file);
+      const response = await fetch('/api/documents/upload', { method: 'POST', body });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error);
+      setFiles((f) => [...f, data]);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function submit() {
+    setBusy(true);
+    setError('');
+    try {
+      if (!form.acknowledged)
+        throw new Error('Bitte bestätigen Sie den Hinweis zur Mandatsannahme und zu Fristen.');
+      const r = await post<{ reference: string; id: string }>('intake', {
+        ...form,
+        id: caseId,
+        deadline: form.deadline || null,
+      });
+      setResult(r);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const login = (
+    <div className="notice">
+      <p>
+        Für vertrauliche Unterlagen und das Absenden benötigen Sie eine bestätigte E-Mail-Adresse.
+      </p>
+      <div className="form-actions">
+        <Link className="small-button" href="/mandantenbereich" target="_blank" rel="noopener">
+          Anmelden / Konto erstellen ↗
+        </Link>
+        <button type="button" className="small-button" onClick={verify} disabled={busy || !auth}>
+          {verified ? '✓ Anmeldung bestätigt' : 'Anmeldung prüfen'}
+        </button>
+      </div>
+      <p className="privacy-meta">
+        Die Anmeldung öffnet sich in einem neuen Tab. Kehren Sie anschließend zu dieser Anfrage
+        zurück. Ihre Eingaben bleiben nur in diesem geöffneten Formular.
+      </p>
+    </div>
+  );
+  if (result)
+    return (
+      <div className="form-card">
+        <div className="eyebrow">
+          <Check size={16} />
+          Anfrage übermittelt
+        </div>
+        <h2>Ihre Anfrage ist eingegangen.</h2>
+        <p>
+          Ihre Vorgangsnummer: <strong>{result.reference}</strong>
+        </p>
+        <div className="notice">
+          Die Kanzlei prüft Ihre Anfrage und mögliche Interessenkonflikte. Ein Mandat entsteht erst
+          durch ausdrückliche Annahme. Diese Bestätigung wahrt keine Fristen.
+        </div>
+        <Link href={`/portal/akten/${result.id}`} className="button">
+          Anfrage im Mandantenbereich öffnen
+          <ArrowRight size={17} />
+        </Link>
+      </div>
+    );
+  return (
+    <div className="form-shell">
+      <div className="wizard-progress" aria-label={`Schritt ${step + 1} von 6`}>
+        {['Rechtsgebiet', 'Anliegen', 'Sachverhalt', 'Unterlagen', 'Kontakt', 'Prüfen'].map(
+          (s, i) => (
+            <div
+              key={s}
+              className={i === step ? 'current' : i < step ? 'done' : ''}
+              aria-current={i === step ? 'step' : undefined}
+            >
+              <b>{i < step ? '✓' : `0${i + 1}`}</b>
+              {s}
+            </div>
+          ),
+        )}
+      </div>
+      <div className="form-card" ref={panel} tabIndex={-1}>
+        {step === 0 && (
+          <>
+            <h2>Worum geht es bei Ihnen?</h2>
+            <p>Wählen Sie den Bereich, der am ehesten passt.</p>
+            <div className="choice-grid">
+              {practices.map((p) => {
+                const Icon = icons[p.icon];
+                return (
+                  <button
+                    type="button"
+                    key={p.slug}
+                    onClick={() => field('practice', p.slug)}
+                    className={`choice ${form.practice === p.slug ? 'selected' : ''}`}
+                    aria-pressed={form.practice === p.slug}
+                  >
+                    <Icon size={25} />
+                    <span>
+                      {p.title}
+                      <small>{p.tag}</small>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              className={`choice ${form.practice === 'unklar' ? 'selected' : ''}`}
+              onClick={() => field('practice', 'unklar')}
+              aria-pressed={form.practice === 'unklar'}
+            >
+              <span>
+                Noch unklar<small>Ich möchte meinen Fall zunächst schildern.</small>
+              </span>
+            </button>
+          </>
+        )}
+        {step === 1 && (
+          <>
+            <h2>Was möchten Sie klären?</h2>
+            <p>Eine kurze Beschreibung reicht für den Einstieg.</p>
+            <div className="form-field">
+              <label htmlFor="subject">Ihr Anliegen in einem Satz *</label>
+              <input
+                id="subject"
+                value={form.subject}
+                maxLength={180}
+                onChange={(e) => field('subject', e.target.value)}
+                placeholder="Zum Beispiel: Vorladung wegen eines Betrugsvorwurfs"
+                required
+              />
+            </div>
+            <div className="form-field">
+              <label htmlFor="urgency">Wie dringend ist die Anfrage?</label>
+              <select
+                id="urgency"
+                value={form.urgency}
+                onChange={(e) => field('urgency', e.target.value)}
+              >
+                <option value="normal">Keine bekannte kurzfristige Frist</option>
+                <option value="zeitnah">Zeitnah – eine Frist ist bekannt</option>
+                <option value="dringend">Dringend – kurzfristiger Handlungsbedarf</option>
+              </select>
+            </div>
+            <div className="notice">
+              Auch eine als dringend markierte Anfrage löst keinen Bereitschaftsdienst aus. Eine
+              Übernahme muss ausdrücklich bestätigt werden.
+            </div>
+          </>
+        )}
+        {step === 2 && (
+          <>
+            <h2>Was ist passiert?</h2>
+            <p>
+              Beschreiben Sie die Ereignisse in zeitlicher Reihenfolge. Juristische Formulierungen
+              sind nicht nötig.
+            </p>
+            <div className="form-field">
+              <label htmlFor="facts">Ihr Sachverhalt * (mindestens 30 Zeichen)</label>
+              <textarea
+                id="facts"
+                value={form.facts}
+                maxLength={20000}
+                onChange={(e) => field('facts', e.target.value)}
+                placeholder="Was ist passiert? Welche Schreiben liegen vor? Was möchten Sie erreichen?"
+                required
+              />
+              <small>Bitte keine Passwörter, PINs oder TANs eintragen.</small>
+            </div>
+            <div className="form-field">
+              <label htmlFor="opponent">Beteiligte Personen / Unternehmen *</label>
+              <textarea
+                id="opponent"
+                style={{ minHeight: 85 }}
+                value={form.opponent}
+                maxLength={1500}
+                onChange={(e) => field('opponent', e.target.value)}
+                placeholder="Namen der Gegenseite und weiterer Beteiligter; falls nicht bekannt: unbekannt"
+                required
+              />
+              <small>Diese Angabe hilft bei der Prüfung möglicher Interessenkonflikte.</small>
+            </div>
+            <div className="form-field">
+              <label htmlFor="deadline">Bekannte Frist (optional)</label>
+              <input
+                type="date"
+                id="deadline"
+                value={form.deadline}
+                onChange={(e) => field('deadline', e.target.value)}
+              />
+              <small>Bitte das konkrete Datum nennen. Die Anfrage selbst wahrt keine Frist.</small>
+            </div>
+          </>
+        )}
+        {step === 3 && (
+          <>
+            <h2>Welche Unterlagen liegen vor?</h2>
+            <p>Sie können Unterlagen beifügen oder die Anfrage ohne Dateien fortsetzen.</p>
+            {!verified && login}
+            {uploads && live ? (
+              <div className="file-zone">
+                <Upload size={25} />
+                <p>PDF, JPG, PNG oder TXT · bis 10 MB pro Datei</p>
+                <label htmlFor="documents" className="field-label">
+                  Unterlage zur Sicherheitsprüfung auswählen
+                </label>
+                <input
+                  id="documents"
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.txt"
+                  disabled={busy || !verified}
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void upload(f);
+                    e.target.value = '';
+                  }}
+                />
+                <small>
+                  Eine Datei wird erst nach erfolgreicher Schadsoftwareprüfung gespeichert.
+                </small>
+              </div>
+            ) : (
+              <div className="notice">
+                Der sichere Upload ist noch nicht freigeschaltet. Sie können ohne Dateien
+                fortfahren.
+              </div>
+            )}
+            {files.length > 0 && (
+              <ul className="file-list">
+                {files.map((f) => (
+                  <li key={f.id}>
+                    <span>{f.name}</span>
+                    <span>
+                      <Check size={14} /> Geprüft
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
+        {step === 4 && (
+          <>
+            <h2>Wie dürfen wir Sie ansprechen?</h2>
+            <p>Die Eingangsbestätigung geht an die bestätigte E-Mail-Adresse Ihres Kontos.</p>
+            {login}
+            <div className="form-field">
+              <label htmlFor="fullName">Vor- und Nachname *</label>
+              <input
+                id="fullName"
+                autoComplete="name"
+                value={form.fullName}
+                maxLength={150}
+                onChange={(e) => field('fullName', e.target.value)}
+                required
+              />
+            </div>
+            <div className="form-row">
+              <div className="form-field">
+                <label htmlFor="phone">Telefon (optional)</label>
+                <input
+                  type="tel"
+                  id="phone"
+                  autoComplete="tel"
+                  value={form.phone}
+                  maxLength={50}
+                  onChange={(e) => field('phone', e.target.value)}
+                />
+              </div>
+              <div className="form-field">
+                <label htmlFor="company">Unternehmen (optional)</label>
+                <input
+                  id="company"
+                  autoComplete="organization"
+                  value={form.company}
+                  maxLength={180}
+                  onChange={(e) => field('company', e.target.value)}
+                />
+              </div>
+            </div>
+          </>
+        )}
+        {step === 5 && (
+          <>
+            <h2>Ist alles richtig?</h2>
+            <p>Prüfen Sie Ihre Angaben vor dem Übermitteln.</p>
+            <dl className="summary-list">
+              <dt>Rechtsgebiet</dt>
+              <dd>{practices.find((p) => p.slug === form.practice)?.title || 'Noch unklar'}</dd>
+              <dt>Anliegen</dt>
+              <dd>{form.subject}</dd>
+              <dt>Dringlichkeit</dt>
+              <dd>
+                {
+                  { normal: 'Keine kurzfristige Frist', zeitnah: 'Zeitnah', dringend: 'Dringend' }[
+                    form.urgency
+                  ]
+                }
+              </dd>
+              <dt>Sachverhalt</dt>
+              <dd>{form.facts}</dd>
+              <dt>Beteiligte</dt>
+              <dd>{form.opponent}</dd>
+              <dt>Frist</dt>
+              <dd>{form.deadline || 'Keine angegeben'}</dd>
+              <dt>Unterlagen</dt>
+              <dd>{files.map((f) => f.name).join(', ') || 'Keine beigefügt'}</dd>
+              <dt>Kontakt</dt>
+              <dd>
+                {form.fullName}
+                <br />
+                {form.phone}
+                <br />
+                {form.company}
+              </dd>
+            </dl>
+            <div className="notice">
+              <strong>Wichtig vor dem Absenden</strong>
+              <p>
+                Ihre Anfrage begründet noch kein angenommenes Mandat und hat keine fristwahrende
+                Wirkung. Die Kanzlei prüft die Anfrage und mögliche Interessenkonflikte vor einer
+                ausdrücklichen Mandatsannahme. Das Absenden löst keine Zahlung aus.
+              </p>
+            </div>
+            <label className="checkbox-line">
+              <input
+                type="checkbox"
+                checked={form.acknowledged}
+                onChange={(e) => field('acknowledged', e.target.checked)}
+              />
+              <span>
+                Ich habe den Hinweis zur Mandatsannahme und zu Fristen gelesen. Die{' '}
+                <Link href="/datenschutz" target="_blank">
+                  Datenschutzhinweise
+                </Link>{' '}
+                habe ich zur Kenntnis genommen.
+              </span>
+            </label>
+          </>
+        )}
+        {error && (
+          <div className="notice error" role="alert">
+            {error}
+          </div>
+        )}
+        <div className="form-actions">
+          {step > 0 ? (
+            <button
+              className="small-button"
+              type="button"
+              onClick={() => move(step - 1)}
+              disabled={busy}
+            >
+              <ArrowLeft size={12} style={{ display: 'inline', marginRight: 7 }} />
+              Zurück
+            </button>
+          ) : (
+            <span />
+          )}
+          {step < 5 ? (
+            <button type="button" className="button" onClick={next} disabled={busy}>
+              Weiter
+              <ArrowRight size={16} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="button"
+              onClick={submit}
+              disabled={busy || !live || !form.acknowledged}
+            >
+              {busy ? 'Wird übermittelt …' : 'Anfrage sicher übermitteln'}
+              <ArrowRight size={16} />
+            </button>
+          )}
+        </div>
+        {!live && (
+          <p className="privacy-meta">
+            Die Kanzlei befindet sich in Vorbereitung. Das Übermitteln ist noch nicht
+            freigeschaltet.
+          </p>
+        )}
+        <p className="privacy-meta">
+          <LockKeyhole size={12} style={{ display: 'inline', marginRight: 5 }} />
+          Ihre Eingaben werden nicht in Browser-Tracking oder Analysewerkzeuge übertragen.
+        </p>
+      </div>
+    </div>
+  );
 }

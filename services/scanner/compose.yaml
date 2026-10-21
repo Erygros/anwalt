@@ -1,0 +1,22 @@
+services:
+  clamav:
+    image: ${CLAMAV_IMAGE:-clamav/clamav:stable}
+    restart: unless-stopped
+    volumes:
+      - signatures:/var/lib/clamav
+    networks: [scanning]
+  scanner:
+    build: .
+    restart: unless-stopped
+    environment:
+      SCANNER_TOKEN: ${SCANNER_TOKEN:?Set a long random scanner token}
+      CLAMD_HOST: clamav
+    ports: ["127.0.0.1:8788:8788"]
+    read_only: true
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    networks: [scanning]
+networks:
+  scanning: {}
+volumes:
+  signatures: {}

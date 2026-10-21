@@ -1,41 +1,364 @@
-import {test,before,after} from 'node:test';
+import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
-import {PGlite} from '@electric-sql/pglite';
-import {btree_gist} from '@electric-sql/pglite/contrib/btree_gist';
-import {pgcrypto} from '@electric-sql/pglite/contrib/pgcrypto';
-const database=new PGlite({extensions:{btree_gist,pgcrypto}});
-const ids={a:'10000000-0000-4000-8000-000000000001',b:'10000000-0000-4000-8000-000000000002',admin:'10000000-0000-4000-8000-000000000003',lawyer:'10000000-0000-4000-8000-000000000004',assistant:'10000000-0000-4000-8000-000000000005',unverified:'10000000-0000-4000-8000-000000000006'};
-let caseA:string,caseB:string,slot:string;
-async function asUser(id:string,aal='aal1'){await database.exec('reset role');await database.query("select set_config('request.jwt.claims',$1,false)",[JSON.stringify({sub:id,aal})]);await database.exec('set role authenticated');}
-before(async()=>{
- await database.exec(`create role anon; create role authenticated; create role service_role bypassrls; create schema auth; create schema storage;
+import { readFile } from 'node:fs/promises';
+import { PGlite } from '@electric-sql/pglite';
+import { btree_gist } from '@electric-sql/pglite/contrib/btree_gist';
+import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
+const database = new PGlite({ extensions: { btree_gist, pgcrypto } });
+const ids = {
+  a: '10000000-0000-4000-8000-000000000001',
+  b: '10000000-0000-4000-8000-000000000002',
+  admin: '10000000-0000-4000-8000-000000000003',
+  lawyer: '10000000-0000-4000-8000-000000000004',
+  assistant: '10000000-0000-4000-8000-000000000005',
+  unverified: '10000000-0000-4000-8000-000000000006',
+};
+let caseA: string, caseB: string, slot: string;
+async function asUser(id: string, aal = 'aal1') {
+  await database.exec('reset role');
+  await database.query("select set_config('request.jwt.claims',$1,false)", [
+    JSON.stringify({ sub: id, aal }),
+  ]);
+  await database.exec('set role authenticated');
+}
+before(async () => {
+  await database.exec(
+    `create role anon; create role authenticator; create role authenticated; create role service_role bypassrls; create schema auth; create schema storage;
  create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz);
  create table auth.mfa_factors(id uuid primary key default gen_random_uuid(),user_id uuid references auth.users,status text);
  create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub'$$;
- ` .replace("select nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub'","select (nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub')::uuid"));
- await database.exec(`create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}'::jsonb)$$;
+ `.replace(
+      "select nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub'",
+      "select (nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'sub')::uuid",
+    ),
+  );
+  await database.exec(`create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),'')::jsonb,'{}'::jsonb)$$;
  grant usage on schema public,auth to anon,authenticated,service_role;
  grant execute on function auth.uid(),auth.jwt() to anon,authenticated,service_role;
  create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);`);
- for(const file of ['202610210001_initial.sql','202610210002_session_and_payments.sql','202610210003_atomic_intake.sql'])await database.exec(await readFile(`supabase/migrations/${file}`,'utf8'));
- for(const [name,id] of Object.entries(ids))await database.query('insert into auth.users(id,email,email_confirmed_at) values($1,$2,$3)',[id,`${name}@example.invalid`,name==='unverified'?null:new Date().toISOString()]);
- for(const role of ['admin','lawyer','assistant'] as const)await database.query('insert into public.staff_members(user_id,role) values($1,$2)',[ids[role],role]);
- const a=await database.query<{id:string}>("insert into public.cases(client_id,practice,subject,status) values($1,'it-recht','Test A','submitted') returning id",[ids.a]);caseA=a.rows[0].id;
- const b=await database.query<{id:string}>("insert into public.cases(client_id,practice,subject,status) values($1,'steuerrecht','Test B','submitted') returning id",[ids.b]);caseB=b.rows[0].id;
- await database.query('insert into public.case_members(case_id,user_id) values($1,$2),($1,$3)',[caseA,ids.lawyer,ids.assistant]);
- await database.query("insert into public.messages(case_id,sender_id,body,internal) values($1,$2,'Visible test',false),($1,$2,'Internal test',true)",[caseA,ids.admin]);
- const s=await database.query<{id:string}>("insert into public.availability_slots(staff_id,starts_at,ends_at) values($1,now()+interval '3 days',now()+interval '3 days 30 minutes') returning id",[ids.lawyer]);slot=s.rows[0].id;
+  await database.exec(
+    'create schema extensions; create extension btree_gist with schema extensions;',
+  );
+  for (const file of [
+    '202610210001_initial.sql',
+    '202610210002_session_and_payments.sql',
+    '202610210003_atomic_intake.sql',
+    '202610210004_read_audit.sql',
+    '202610210005_retention_lock.sql',
+    '202610210006_atomic_review.sql',
+  ])
+    await database.exec(await readFile(`supabase/migrations/${file}`, 'utf8'));
+  for (const [name, id] of Object.entries(ids))
+    await database.query('insert into auth.users(id,email,email_confirmed_at) values($1,$2,$3)', [
+      id,
+      `${name}@example.invalid`,
+      name === 'unverified' ? null : new Date().toISOString(),
+    ]);
+  for (const role of ['admin', 'lawyer', 'assistant'] as const)
+    await database.query('insert into public.staff_members(user_id,role) values($1,$2)', [
+      ids[role],
+      role,
+    ]);
+  const a = await database.query<{ id: string }>(
+    "insert into public.cases(client_id,practice,subject,status) values($1,'it-recht','Test A','submitted') returning id",
+    [ids.a],
+  );
+  caseA = a.rows[0].id;
+  const b = await database.query<{ id: string }>(
+    "insert into public.cases(client_id,practice,subject,status) values($1,'steuerrecht','Test B','submitted') returning id",
+    [ids.b],
+  );
+  caseB = b.rows[0].id;
+  await database.query('insert into public.case_members(case_id,user_id) values($1,$2),($1,$3)', [
+    caseA,
+    ids.lawyer,
+    ids.assistant,
+  ]);
+  await database.query(
+    "insert into public.messages(case_id,sender_id,body,internal) values($1,$2,'Visible test',false),($1,$2,'Internal test',true)",
+    [caseA, ids.admin],
+  );
+  const s = await database.query<{ id: string }>(
+    "insert into public.availability_slots(staff_id,starts_at,ends_at) values($1,now()+interval '3 days',now()+interval '3 days 30 minutes') returning id",
+    [ids.lawyer],
+  );
+  slot = s.rows[0].id;
 });
-after(async()=>{await database.close();});
-test('clients can read only their own case and no internal notes',async()=>{await asUser(ids.a);const cases=await database.query<{id:string}>('select id from public.cases');assert.deepEqual(cases.rows.map(r=>r.id),[caseA]);const messages=await database.query('select body from public.messages');assert.equal(messages.rows.length,1);await assert.rejects(database.query("insert into public.messages(case_id,sender_id,body) values($1,$2,'direct mutation')",[caseA,ids.a]),/permission denied/);});
-test('unverified accounts and anonymous users cannot read cases',async()=>{await asUser(ids.unverified);assert.equal((await database.query('select id from public.cases')).rows.length,0);await database.exec('reset role;set role anon');await assert.rejects(database.query('select id from public.cases'),/permission denied/);});
-test('staff require AAL2 and explicit case membership',async()=>{await asUser(ids.lawyer);assert.equal((await database.query('select id from public.cases')).rows.length,0);await asUser(ids.lawyer,'aal2');assert.deepEqual((await database.query<{id:string}>('select id from public.cases')).rows.map(r=>r.id),[caseA]);assert.equal((await database.query('select body from public.messages')).rows.length,2);await asUser(ids.assistant,'aal2');assert.equal((await database.query('select id from public.cases')).rows.length,1);await asUser(ids.admin,'aal2');assert.equal((await database.query('select id from public.cases')).rows.length,2);});
-test('optional client MFA also protects direct PostgREST reads',async()=>{await database.exec('reset role');await database.query("insert into auth.mfa_factors(user_id,status) values($1,'verified')",[ids.a]);await asUser(ids.a);assert.equal((await database.query('select id from public.cases')).rows.length,0);await asUser(ids.a,'aal2');assert.equal((await database.query('select id from public.cases')).rows.length,1);});
-test('roles, prices, audit logs and invoice state cannot be written by clients',async()=>{await asUser(ids.b);for(const table of ['staff_members','settings','invoices','audit_logs','case_members','appointments'])await assert.rejects(database.query(`delete from public.${table}`),/permission denied/);await assert.rejects(database.query("select public.book_appointment($1,$2,'phone',null,null)",[ids.b,slot]),/permission denied/);});
-test('booking uses unique database constraint and failed reschedule keeps original',async()=>{await database.exec('reset role;set role service_role');const booking=await database.query<{id:string}>("select public.book_appointment($1,$2,'phone',null,null) id",[ids.a,slot]);assert.ok(booking.rows[0].id);await assert.rejects(database.query("select public.book_appointment($1,$2,'phone',null,null)",[ids.b,slot]),/duplicate key/);const rows=await database.query('select id from public.appointments where status=\'booked\'');assert.equal(rows.rows.length,1);await assert.rejects(database.query("select public.book_appointment($1,$2,'video',null,$3)",[ids.a,slot,booking.rows[0].id]),/SLOT_UNAVAILABLE/);assert.equal((await database.query("select id from public.appointments where status='booked'")).rows.length,1);});
-test('overlapping availability for same lawyer is rejected',async()=>{await database.exec('reset role');await assert.rejects(database.query("insert into public.availability_slots(staff_id,starts_at,ends_at) select staff_id,starts_at+interval '5 minutes',ends_at+interval '5 minutes' from public.availability_slots where id=$1",[slot]),/exclusion constraint/);});
-test('mandate acceptance requires a completed conflict check',async()=>{await database.exec('reset role');await assert.rejects(database.query("update public.cases set status='accepted' where id=$1",[caseA]),/accepted_needs_conflict_check/);});
-test('service role can create references after function grants are restricted',async()=>{await database.exec('reset role;set role service_role');const r=await database.query<{reference:string}>("insert into public.cases(client_id,practice) values($1,'strafrecht') returning reference",[ids.b]);assert.match(r.rows[0].reference,/^DA-[A-F0-9]{12}$/);});
-test('payment is bound to invoice, session, amount and currency; events are idempotent',async()=>{await database.exec('reset role');const invoice=await database.query<{id:string}>("insert into public.invoices(case_id,client_id,number,service_id,description,amount,tax_rate,stripe_session_id) values($1,$2,'TEST-001','test','Test only',12000,19,'cs_test_expected') returning id",[caseB,ids.b]);const id=invoice.rows[0].id;await database.exec('set role service_role');await assert.rejects(database.query("select public.record_payment('evt_wrong',$1,'cs_wrong',12000,'eur')",[id]),/PAYMENT_MISMATCH/);await assert.rejects(database.query("select public.record_payment('evt_wrong_amount',$1,'cs_test_expected',1,'eur')",[id]),/PAYMENT_MISMATCH/);const paid=await database.query<{ok:boolean}>("select public.record_payment('evt_ok',$1,'cs_test_expected',12000,'eur') ok",[id]);assert.equal(paid.rows[0].ok,true);const duplicate=await database.query<{ok:boolean}>("select public.record_payment('evt_ok',$1,'cs_test_expected',12000,'eur') ok",[id]);assert.equal(duplicate.rows[0].ok,false);});
-test('submission atomically queues a safe receipt and cannot resubmit a draft',async()=>{await database.exec('reset role;set role service_role');const draft=await database.query<{id:string}>("insert into public.cases(client_id,practice) values($1,'it-recht') returning id",[ids.b]);const params=[ids.b,draft.rows[0].id,'it-recht','Contract test','normal','A purely synthetic test of atomic submission.',null,'Unknown','Test Person','',''];const result=await database.query<{id:string;reference:string}>('select * from public.submit_intake($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',params);assert.equal(result.rows[0].id,draft.rows[0].id);const outbox=await database.query<{kind:string;reference:string}>('select kind,reference from public.mail_outbox where dedup_key=$1',[`intake:${draft.rows[0].id}`]);assert.equal(outbox.rows[0].reference,result.rows[0].reference);await assert.rejects(database.query('select * from public.submit_intake($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',params),/INVALID_DRAFT/);});
+after(async () => {
+  await database.close();
+});
+test('clients can read only their own case and no internal notes', async () => {
+  await asUser(ids.a);
+  const cases = await database.query<{ id: string }>('select id from public.cases');
+  assert.deepEqual(
+    cases.rows.map((r) => r.id),
+    [caseA],
+  );
+  const messages = await database.query('select body from public.messages');
+  assert.equal(messages.rows.length, 1);
+  await assert.rejects(
+    database.query(
+      "insert into public.messages(case_id,sender_id,body) values($1,$2,'direct mutation')",
+      [caseA, ids.a],
+    ),
+    /permission denied/,
+  );
+});
+test('unverified accounts and anonymous users cannot read cases', async () => {
+  await asUser(ids.unverified);
+  assert.equal((await database.query('select id from public.cases')).rows.length, 0);
+  await database.exec('reset role;set role anon');
+  await assert.rejects(database.query('select id from public.cases'), /permission denied/);
+});
+test('staff require AAL2 and explicit case membership', async () => {
+  await asUser(ids.lawyer);
+  assert.equal((await database.query('select id from public.cases')).rows.length, 0);
+  await asUser(ids.lawyer, 'aal2');
+  assert.deepEqual(
+    (await database.query<{ id: string }>('select id from public.cases')).rows.map((r) => r.id),
+    [caseA],
+  );
+  assert.equal((await database.query('select body from public.messages')).rows.length, 2);
+  await asUser(ids.assistant, 'aal2');
+  assert.equal((await database.query('select id from public.cases')).rows.length, 1);
+  await asUser(ids.admin, 'aal2');
+  assert.equal((await database.query('select id from public.cases')).rows.length, 2);
+});
+test('optional client MFA also protects direct PostgREST reads', async () => {
+  await database.exec('reset role');
+  await database.query("insert into auth.mfa_factors(user_id,status) values($1,'verified')", [
+    ids.a,
+  ]);
+  await asUser(ids.a);
+  assert.equal((await database.query('select id from public.cases')).rows.length, 0);
+  await asUser(ids.a, 'aal2');
+  assert.equal((await database.query('select id from public.cases')).rows.length, 1);
+});
+test('roles, prices, audit logs and invoice state cannot be written by clients', async () => {
+  await asUser(ids.b);
+  for (const table of [
+    'staff_members',
+    'settings',
+    'invoices',
+    'audit_logs',
+    'case_members',
+    'appointments',
+  ])
+    await assert.rejects(database.query(`delete from public.${table}`), /permission denied/);
+  await assert.rejects(
+    database.query("select public.book_appointment($1,$2,'phone',null,null)", [ids.b, slot]),
+    /permission denied/,
+  );
+});
+test('booking uses unique database constraint and failed reschedule keeps original', async () => {
+  await database.exec('reset role;set role service_role');
+  const booking = await database.query<{ id: string }>(
+    "select public.book_appointment($1,$2,'phone',null,null) id",
+    [ids.a, slot],
+  );
+  assert.ok(booking.rows[0].id);
+  await assert.rejects(
+    database.query("select public.book_appointment($1,$2,'phone',null,null)", [ids.b, slot]),
+    /duplicate key/,
+  );
+  const rows = await database.query("select id from public.appointments where status='booked'");
+  assert.equal(rows.rows.length, 1);
+  await assert.rejects(
+    database.query("select public.book_appointment($1,$2,'video',null,$3)", [
+      ids.a,
+      slot,
+      booking.rows[0].id,
+    ]),
+    /SLOT_UNAVAILABLE/,
+  );
+  assert.equal(
+    (await database.query("select id from public.appointments where status='booked'")).rows.length,
+    1,
+  );
+});
+test('overlapping availability for same lawyer is rejected', async () => {
+  await database.exec('reset role');
+  await assert.rejects(
+    database.query(
+      "insert into public.availability_slots(staff_id,starts_at,ends_at) select staff_id,starts_at+interval '5 minutes',ends_at+interval '5 minutes' from public.availability_slots where id=$1",
+      [slot],
+    ),
+    /exclusion constraint/,
+  );
+});
+test('mandate acceptance requires a completed conflict check', async () => {
+  await database.exec('reset role');
+  await assert.rejects(
+    database.query("update public.cases set status='accepted' where id=$1", [caseA]),
+    /accepted_needs_conflict_check/,
+  );
+  await assert.rejects(
+    database.query(
+      "update public.cases set status='accepted',conflict_checked_at=now(),conflict_checked_by=$2 where id=$1",
+      [caseA, ids.admin],
+    ),
+    /accepted_needs_conflict_check/,
+  );
+});
+test('service role can create references after function grants are restricted', async () => {
+  await database.exec('reset role;set role service_role');
+  const r = await database.query<{ reference: string }>(
+    "insert into public.cases(client_id,practice) values($1,'strafrecht') returning reference",
+    [ids.b],
+  );
+  assert.match(r.rows[0].reference, /^DA-[A-F0-9]{12}$/);
+});
+test('payment is bound to invoice, session, amount and currency; events are idempotent', async () => {
+  await database.exec('reset role');
+  const invoice = await database.query<{ id: string }>(
+    "insert into public.invoices(case_id,client_id,number,service_id,description,amount,tax_rate,stripe_session_id) values($1,$2,'TEST-001','test','Test only',12000,19,'cs_test_expected') returning id",
+    [caseB, ids.b],
+  );
+  const id = invoice.rows[0].id;
+  await database.exec('set role service_role');
+  await assert.rejects(
+    database.query("select public.record_payment('evt_wrong',$1,'cs_wrong',12000,'eur')", [id]),
+    /PAYMENT_MISMATCH/,
+  );
+  await assert.rejects(
+    database.query(
+      "select public.record_payment('evt_wrong_amount',$1,'cs_test_expected',1,'eur')",
+      [id],
+    ),
+    /PAYMENT_MISMATCH/,
+  );
+  const paid = await database.query<{ ok: boolean }>(
+    "select public.record_payment('evt_ok',$1,'cs_test_expected',12000,'eur') ok",
+    [id],
+  );
+  assert.equal(paid.rows[0].ok, true);
+  const duplicate = await database.query<{ ok: boolean }>(
+    "select public.record_payment('evt_ok',$1,'cs_test_expected',12000,'eur') ok",
+    [id],
+  );
+  assert.equal(duplicate.rows[0].ok, false);
+});
+test('submission atomically queues a safe receipt and cannot resubmit a draft', async () => {
+  await database.exec('reset role;set role service_role');
+  const draft = await database.query<{ id: string }>(
+    "insert into public.cases(client_id,practice) values($1,'it-recht') returning id",
+    [ids.b],
+  );
+  const params = [
+    ids.b,
+    draft.rows[0].id,
+    'it-recht',
+    'Contract test',
+    'normal',
+    'A purely synthetic test of atomic submission.',
+    null,
+    'Unknown',
+    'Test Person',
+    '',
+    '',
+  ];
+  const result = await database.query<{ id: string; reference: string }>(
+    'select * from public.submit_intake($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+    params,
+  );
+  assert.equal(result.rows[0].id, draft.rows[0].id);
+  const outbox = await database.query<{ kind: string; reference: string }>(
+    'select kind,reference from public.mail_outbox where dedup_key=$1',
+    [`intake:${draft.rows[0].id}`],
+  );
+  assert.equal(outbox.rows[0].reference, result.rows[0].reference);
+  await assert.rejects(
+    database.query(
+      'select * from public.submit_intake($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)',
+      params,
+    ),
+    /INVALID_DRAFT/,
+  );
+});
+test('case review enforces role, transition and atomically stores history and notices', async () => {
+  await database.exec('reset role;set role service_role');
+  await assert.rejects(
+    database.query("select public.review_case($1,$2,'conflict','clear',null)", [
+      ids.assistant,
+      caseA,
+    ]),
+    /FORBIDDEN/,
+  );
+  await assert.rejects(
+    database.query("select public.review_case($1,$2,'status','accepted','test-version')", [
+      ids.lawyer,
+      caseA,
+    ]),
+    /INVALID_STATE/,
+  );
+  await database.query("select public.review_case($1,$2,'conflict','clear',null)", [
+    ids.lawyer,
+    caseA,
+  ]);
+  await database.query("select public.review_case($1,$2,'status','accepted','test-version')", [
+    ids.lawyer,
+    caseA,
+  ]);
+  assert.equal(
+    (
+      await database.query<{ status: string }>('select status from public.cases where id=$1', [
+        caseA,
+      ])
+    ).rows[0].status,
+    'accepted',
+  );
+  assert.equal(
+    (
+      await database.query('select id from public.mail_outbox where dedup_key=$1', [
+        `status:${caseA}:accepted`,
+      ])
+    ).rows.length,
+    1,
+  );
+  await assert.rejects(
+    database.query("select public.review_case($1,$2,'conflict','conflict',null)", [
+      ids.lawyer,
+      caseA,
+    ]),
+    /INVALID_STATE/,
+  );
+});
+test('retention claim cannot purge active cases and locks changes during deletion', async () => {
+  await database.exec('reset role;set role service_role');
+  assert.equal(
+    (await database.query<{ ok: boolean }>('select public.claim_retention_purge($1) ok', [caseA]))
+      .rows[0].ok,
+    false,
+  );
+  const c = await database.query<{ id: string }>(
+    "insert into public.cases(client_id,practice,status,retention_until) values($1,'it-recht','closed',current_date-1) returning id",
+    [ids.b],
+  );
+  assert.equal(
+    (
+      await database.query<{ ok: boolean }>('select public.claim_retention_purge($1) ok', [
+        c.rows[0].id,
+      ])
+    ).rows[0].ok,
+    true,
+  );
+  await assert.rejects(
+    database.query('update public.cases set legal_hold=true where id=$1', [c.rows[0].id]),
+    /PURGE_IN_PROGRESS/,
+  );
+});
+test('Data API hook records only the actor and table, without confidential queries', async () => {
+  await database.exec('reset role');
+  await database.query(
+    "select set_config('request.method','GET',false),set_config('request.path','/cases',false)",
+  );
+  await asUser(ids.a, 'aal2');
+  await database.query('select public.audit_api_access()');
+  await database.exec('reset role');
+  const logs = await database.query<{ actor_id: string; entity_type: string; entity_id: null }>(
+    "select actor_id,entity_type,entity_id from public.audit_logs where action='data_api_read' order by id desc limit 1",
+  );
+  assert.equal(logs.rows[0].actor_id, ids.a);
+  assert.equal(logs.rows[0].entity_type, 'cases');
+  assert.equal(logs.rows[0].entity_id, null);
+});

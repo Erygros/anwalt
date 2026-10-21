@@ -18,14 +18,13 @@ do $$ declare t text; begin
  execute format('create policy verified_session on public.%I as restrictive for select to authenticated using(public.session_ready())',t);
  end loop;
 end $$;
-grant execute on function public.gen_random_bytes(integer) to service_role;
 create or replace function public.record_payment(p_event text,p_invoice uuid,p_session text,p_amount integer,p_currency text)
 returns boolean language plpgsql security definer set search_path='' as $$
 declare invoice public.invoices; begin
  insert into public.stripe_events(id) values(p_event) on conflict do nothing;
  if not found then return false; end if;
  select * into invoice from public.invoices where id=p_invoice for update;
- if not found or invoice.amount<>p_amount or p_currency<>'eur' or invoice.stripe_session_id is distinct from p_session or invoice.status='void' then raise exception 'PAYMENT_MISMATCH'; end if;
+ if not found or invoice.amount is distinct from p_amount or p_currency is distinct from 'eur' or invoice.stripe_session_id is distinct from p_session or invoice.status='void' then raise exception 'PAYMENT_MISMATCH'; end if;
  if invoice.status='paid' then return false; end if;
  update public.invoices set status='paid',paid_at=now() where id=p_invoice;
  insert into public.audit_logs(action,entity_type,entity_id) values('payment_verified','invoice',p_invoice::text);

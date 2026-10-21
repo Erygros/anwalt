@@ -6,9 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "check:env": "tsx scripts/check-env.ts"
+    "check:env": "tsx scripts/check-env.ts",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.ts\" \"scripts/**/*.{ts,mjs}\"",
+    "test:http": "node scripts/test-http.mjs",
+    "test:scanner": "node --test tests/scanner.test.mjs"
   },
   "dependencies": {
     "@fontsource/instrument-serif": "^5.2.8",
@@ -26,12 +29,14 @@
     "@electric-sql/pglite": "^0.5.11",
     "@tailwindcss/postcss": "^4.2.0",
     "@types/node": "^24.0.0",
-    "@types/pg": "^8.23.1",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
-    "pg": "^8.23.1",
+    "prettier": "^3.9.10",
     "tailwindcss": "^4.2.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=24 <25"
   }
 }

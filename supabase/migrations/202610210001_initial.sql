@@ -1,5 +1,4 @@
 -- No seeded clients, firms, prices or lawyer identities.
-create extension if not exists pgcrypto;
 create extension if not exists btree_gist;
 create type public.staff_role as enum ('admin', 'lawyer', 'assistant');
 create type public.case_status as enum ('draft', 'submitted', 'conflict_review', 'accepted', 'declined', 'closed');
@@ -16,7 +15,7 @@ create table public.staff_members (
 create table public.settings (key text primary key, value jsonb not null, updated_at timestamptz not null default now());
 create table public.cases (
   id uuid primary key default gen_random_uuid(),
-  reference text not null unique default ('DA-' || upper(encode(gen_random_bytes(6), 'hex'))),
+  reference text not null unique default ('DA-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 12))),
   client_id uuid not null references auth.users,
   practice text not null check (practice in ('strafrecht','steuerrecht','it-recht','online-betrug','unklar')),
   subject text not null default '', urgency text not null default 'normal' check (urgency in ('normal','zeitnah','dringend')),
@@ -27,7 +26,7 @@ create table public.cases (
   submitted_at timestamptz, accepted_at timestamptz, closed_at timestamptz,
   retention_until date, legal_hold boolean not null default false,
   created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
-  constraint accepted_needs_conflict_check check (status <> 'accepted' or (conflict_result='clear' and conflict_checked_at is not null and conflict_checked_by is not null))
+  constraint accepted_needs_conflict_check check (status <> 'accepted' or (conflict_result is not null and conflict_result='clear' and conflict_checked_at is not null and conflict_checked_by is not null))
 );
 create table public.case_members (
   case_id uuid references public.cases on delete cascade,

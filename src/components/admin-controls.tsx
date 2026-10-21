@@ -1,11 +1,419 @@
 'use client';
-import {useState} from 'react';
-import {useRouter} from 'next/navigation';
-import {post,formatDate,formatTime} from '@/lib/client-api';
-import type {Slot,Task} from '@/lib/types';
-function useAction(){const router=useRouter();const [busy,setBusy]=useState(false);const [error,setError]=useState('');const [notice,setNotice]=useState('');async function run(action:string,payload:unknown){setBusy(true);setError('');setNotice('');try{await post('admin',{action,payload});setNotice('Änderung gespeichert.');router.refresh();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}return {busy,run,status:<>{error&&<div className="notice error" role="alert">{error}</div>}{notice&&<div className="notice success" role="status">{notice}</div>}</>};}
-export function AvailabilityManager({slots,video}:{slots:Slot[];video:boolean}){const {busy,run,status}=useAction();const [start,setStart]=useState('');const [duration,setDuration]=useState(30);const [mode,setMode]=useState('phone');return <section className="section-panel"><h2>Terminfenster freigeben</h2><p>Ein Zeitfenster kann genau einmal belegt werden. Überlappungen desselben Berufsträgers werden von der Datenbank abgewiesen.</p><form onSubmit={e=>{e.preventDefault();const startsAt=new Date(start);void run('slot',{startsAt:startsAt.toISOString(),endsAt:new Date(startsAt.getTime()+duration*60000).toISOString(),modes:[mode]});}} style={{marginTop:20}}><div className="form-row"><div className="form-field"><label htmlFor="slot-start">Beginn (lokale Gerätezeit)</label><input id="slot-start" type="datetime-local" value={start} onChange={e=>setStart(e.target.value)} required/></div><div className="form-field"><label htmlFor="slot-duration">Dauer in Minuten</label><select id="slot-duration" value={duration} onChange={e=>setDuration(Number(e.target.value))}>{[15,30,45,60,90,120].map(n=><option key={n}>{n}</option>)}</select></div></div><div className="form-field"><label htmlFor="slot-mode">Beratungsart</label><select id="slot-mode" value={mode} onChange={e=>setMode(e.target.value)}><option value="phone">Telefon</option>{video&&<option value="video">Video (freigegebener Anbieter)</option>}</select></div><button className="button" disabled={busy}>Terminfenster veröffentlichen</button></form>{status}<h3>Zukünftige Terminfenster</h3><ul className="data-list">{slots.map(s=><li key={s.id}><div className="meta-row"><div><h3>{formatDate(s.starts_at)} · {formatTime(s.starts_at)}–{formatTime(s.ends_at)} Uhr</h3><p>{s.modes.join(', ')} · {s.enabled?'Freigegeben':'Geschlossen'}</p></div>{s.enabled&&<button className="small-button" disabled={busy} onClick={()=>void run('disable-slot',{id:s.id})}>Schließen</button>}</div></li>)}</ul></section>;}
-export function TaskManager({tasks}:{tasks:(Task&{case_id:string})[]}){const {busy,run,status}=useAction();return <>{status}<ul className="data-list">{tasks.map(t=><li key={t.id}><div className="meta-row"><div><h3>{t.title}</h3><p>{t.kind} · {formatDate(t.due_at)} · {t.completed_at?'Erledigt':'Offen'}</p><a className="text-link" href={`/admin/akten/${t.case_id}`}>Zur Akte →</a></div>{!t.completed_at&&<button className="small-button" disabled={busy} onClick={()=>void run('complete-task',{id:t.id})}>Erledigen</button>}</div></li>)}</ul>{!tasks.length&&<div className="notice">Keine offenen Aufgaben oder Fristen. Neue Einträge werden in der jeweiligen Akte angelegt.</div>}</>;}
-export function StaffManager({members}:{members:{user_id:string;role:string;active:boolean}[]}){const {busy,run,status}=useAction();const [userId,setUserId]=useState('');const [role,setRole]=useState('assistant');return <>{status}<div className="notice">Ein Konto muss zunächst registriert und die E-Mail-Adresse bestätigt sein. Die Nutzer-ID finden Sie in Supabase Auth. Bei der nächsten Anmeldung wird für Mitarbeiter ein zweiter Faktor verlangt. Rollen werden niemals aus Registrierungsangaben übernommen.</div><form onSubmit={e=>{e.preventDefault();void run('staff',{userId,role,active:true});}}><div className="form-field"><label htmlFor="staff-id">Bestätigte Nutzer-ID</label><input id="staff-id" value={userId} onChange={e=>setUserId(e.target.value)} required pattern="[a-fA-F0-9-]{36}"/></div><div className="form-field"><label htmlFor="staff-role">Rolle</label><select id="staff-role" value={role} onChange={e=>setRole(e.target.value)}><option value="assistant">Assistenz (nur freigegebene Akten)</option><option value="lawyer">Rechtsanwalt / Rechtsanwältin (nur freigegebene Akten)</option><option value="admin">Administration (alle Akten und Einstellungen)</option></select></div><button className="button" disabled={busy}>Berechtigung erteilen</button></form><ul className="data-list">{members.map(m=><li key={m.user_id}><div className="meta-row"><div><h3>{m.user_id}</h3><p>{m.role} · {m.active?'Aktiv':'Deaktiviert'}</p></div><button className="small-button" disabled={busy} onClick={()=>void run('staff',{userId:m.user_id,role:m.role,active:!m.active})}>{m.active?'Deaktivieren':'Aktivieren'}</button></div></li>)}</ul></>;}
-type PrivacyRequest={id:string;user_id:string;kind:string;status:string;resolution:string|null;created_at:string};
-export function PrivacyManager({requests}:{requests:PrivacyRequest[]}){const {busy,run,status}=useAction();const [resolution,setResolution]=useState<Record<string,string>>({});return <>{status}<div className="notice">Erasure-Anfragen erfordern eine individuelle Prüfung der betroffenen Daten, Aufbewahrungsfristen und Löschsperren. Eine Entscheidung hier protokolliert die Bearbeitung; sie löscht nicht automatisch ein Konto. Für eine tatsächliche Löschung steht nach der Fristenprüfung der dokumentierte Löschlauf zur Verfügung.</div>{requests.map(r=><section key={r.id} className="section-panel"><h2>{r.kind==='access'?'Auskunft':'Löschung'} · {formatDate(r.created_at)}</h2><p>Nutzer-ID: {r.user_id} · {r.status}</p>{r.resolution&&<p>{r.resolution}</p>}{r.status==='pending'&&<><div className="form-field" style={{marginTop:20}}><label htmlFor={`privacy-${r.id}`}>Prüfergebnis / Antwort / Aufbewahrungsgrund</label><textarea id={`privacy-${r.id}`} value={resolution[r.id]||''} onChange={e=>setResolution({...resolution,[r.id]:e.target.value})}/></div><div className="form-actions"><button className="small-button" disabled={busy||(resolution[r.id]?.length??0)<10} onClick={()=>void run('privacy',{id:r.id,status:'resolved',resolution:resolution[r.id]})}>Als bearbeitet dokumentieren</button><button className="small-button" disabled={busy||(resolution[r.id]?.length??0)<10} onClick={()=>void run('privacy',{id:r.id,status:'retained',resolution:resolution[r.id]})}>Aufbewahrung begründen</button></div></>}</section>)}</>;}
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { post, formatDate, formatTime } from '@/lib/client-api';
+import type { Slot, Task, Profile } from '@/lib/types';
+function useAction() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  async function run(action: string, payload: unknown) {
+    setBusy(true);
+    setError('');
+    setNotice('');
+    try {
+      await post('admin', { action, payload });
+      setNotice('Änderung gespeichert.');
+      router.refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return {
+    busy,
+    run,
+    status: (
+      <>
+        {error && (
+          <div className="notice error" role="alert">
+            {error}
+          </div>
+        )}
+        {notice && (
+          <div className="notice success" role="status">
+            {notice}
+          </div>
+        )}
+      </>
+    ),
+  };
+}
+export function AvailabilityManager({ slots, video }: { slots: Slot[]; video: boolean }) {
+  const { busy, run, status } = useAction();
+  const [start, setStart] = useState('');
+  const [duration, setDuration] = useState(30);
+  const [mode, setMode] = useState('phone');
+  return (
+    <section className="section-panel">
+      <h2>Terminfenster freigeben</h2>
+      <p>
+        Ein Zeitfenster kann genau einmal belegt werden. Überlappungen desselben Berufsträgers
+        werden von der Datenbank abgewiesen.
+      </p>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          const startsAt = new Date(start);
+          void run('slot', {
+            startsAt: startsAt.toISOString(),
+            endsAt: new Date(startsAt.getTime() + duration * 60000).toISOString(),
+            modes: [mode],
+          });
+        }}
+        style={{ marginTop: 20 }}
+      >
+        <div className="form-row">
+          <div className="form-field">
+            <label htmlFor="slot-start">Beginn (lokale Gerätezeit)</label>
+            <input
+              id="slot-start"
+              type="datetime-local"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+              required
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="slot-duration">Dauer in Minuten</label>
+            <select
+              id="slot-duration"
+              value={duration}
+              onChange={(e) => setDuration(Number(e.target.value))}
+            >
+              {[15, 30, 45, 60, 90, 120].map((n) => (
+                <option key={n}>{n}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div className="form-field">
+          <label htmlFor="slot-mode">Beratungsart</label>
+          <select id="slot-mode" value={mode} onChange={(e) => setMode(e.target.value)}>
+            <option value="phone">Telefon</option>
+            {video && <option value="video">Video (freigegebener Anbieter)</option>}
+          </select>
+        </div>
+        <button className="button" disabled={busy}>
+          Terminfenster veröffentlichen
+        </button>
+      </form>
+      {status}
+      <h3>Zukünftige Terminfenster</h3>
+      <ul className="data-list">
+        {slots.map((s) => (
+          <li key={s.id}>
+            <div className="meta-row">
+              <div>
+                <h3>
+                  {formatDate(s.starts_at)} · {formatTime(s.starts_at)}–{formatTime(s.ends_at)} Uhr
+                </h3>
+                <p>
+                  {s.modes.join(', ')} · {s.enabled ? 'Freigegeben' : 'Geschlossen'}
+                </p>
+              </div>
+              {s.enabled && (
+                <button
+                  className="small-button"
+                  disabled={busy}
+                  onClick={() => void run('disable-slot', { id: s.id })}
+                >
+                  Schließen
+                </button>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+export function TaskManager({ tasks }: { tasks: (Task & { case_id: string })[] }) {
+  const { busy, run, status } = useAction();
+  return (
+    <>
+      {status}
+      <ul className="data-list">
+        {tasks.map((t) => (
+          <li key={t.id}>
+            <div className="meta-row">
+              <div>
+                <h3>{t.title}</h3>
+                <p>
+                  {t.kind} · {formatDate(t.due_at)} · {t.completed_at ? 'Erledigt' : 'Offen'}
+                </p>
+                <a className="text-link" href={`/admin/akten/${t.case_id}`}>
+                  Zur Akte →
+                </a>
+              </div>
+              {!t.completed_at && (
+                <button
+                  className="small-button"
+                  disabled={busy}
+                  onClick={() => void run('complete-task', { id: t.id })}
+                >
+                  Erledigen
+                </button>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+      {!tasks.length && (
+        <div className="notice">
+          Keine offenen Aufgaben oder Fristen. Neue Einträge werden in der jeweiligen Akte angelegt.
+        </div>
+      )}
+    </>
+  );
+}
+export function StaffManager({
+  members,
+}: {
+  members: { user_id: string; role: string; active: boolean }[];
+}) {
+  const { busy, run, status } = useAction();
+  const [userId, setUserId] = useState('');
+  const [role, setRole] = useState('assistant');
+  return (
+    <>
+      {status}
+      <div className="notice">
+        Ein Konto muss zunächst registriert und die E-Mail-Adresse bestätigt sein. Die Nutzer-ID
+        finden Sie in Supabase Auth. Bei der nächsten Anmeldung wird für Mitarbeiter ein zweiter
+        Faktor verlangt. Rollen werden niemals aus Registrierungsangaben übernommen.
+      </div>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void run('staff', { userId, role, active: true });
+        }}
+      >
+        <div className="form-field">
+          <label htmlFor="staff-id">Bestätigte Nutzer-ID</label>
+          <input
+            id="staff-id"
+            value={userId}
+            onChange={(e) => setUserId(e.target.value)}
+            required
+            pattern="[a-fA-F0-9-]{36}"
+          />
+        </div>
+        <div className="form-field">
+          <label htmlFor="staff-role">Rolle</label>
+          <select id="staff-role" value={role} onChange={(e) => setRole(e.target.value)}>
+            <option value="assistant">Assistenz (nur freigegebene Akten)</option>
+            <option value="lawyer">Rechtsanwalt / Rechtsanwältin (nur freigegebene Akten)</option>
+            <option value="admin">Administration (alle Akten und Einstellungen)</option>
+          </select>
+        </div>
+        <button className="button" disabled={busy}>
+          Berechtigung erteilen
+        </button>
+      </form>
+      <ul className="data-list">
+        {members.map((m) => (
+          <li key={m.user_id}>
+            <div className="meta-row">
+              <div>
+                <h3>{m.user_id}</h3>
+                <p>
+                  {m.role} · {m.active ? 'Aktiv' : 'Deaktiviert'}
+                </p>
+              </div>
+              <button
+                className="small-button"
+                disabled={busy}
+                onClick={() =>
+                  void run('staff', { userId: m.user_id, role: m.role, active: !m.active })
+                }
+              >
+                {m.active ? 'Deaktivieren' : 'Aktivieren'}
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+export function ClientManager({ profiles }: { profiles: (Profile & { id: string })[] }) {
+  const { busy, run, status } = useAction();
+  const [editing, setEditing] = useState<string>();
+  const [profile, setProfile] = useState<Profile>({
+    full_name: '',
+    phone: '',
+    company: '',
+    address: '',
+  });
+  return (
+    <>
+      {status}
+      <ul className="data-list">
+        {profiles.map((p) => (
+          <li key={p.id}>
+            <div className="meta-row">
+              <div>
+                <h3>{p.full_name || 'Kontaktdaten noch nicht hinterlegt'}</h3>
+                <p>
+                  {p.phone} {p.company && `· ${p.company}`}
+                  <br />
+                  {p.id}
+                </p>
+              </div>
+              <button
+                className="small-button"
+                onClick={() => {
+                  setEditing(p.id);
+                  setProfile({
+                    full_name: p.full_name,
+                    phone: p.phone,
+                    company: p.company,
+                    address: p.address,
+                  });
+                }}
+              >
+                Kontaktdaten bearbeiten
+              </button>
+            </div>
+            {editing === p.id && (
+              <form
+                style={{ marginTop: 20 }}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void run('client-profile', { userId: p.id, profile });
+                }}
+              >
+                {(
+                  [
+                    ['full_name', 'Name'],
+                    ['phone', 'Telefon'],
+                    ['company', 'Unternehmen'],
+                    ['address', 'Anschrift'],
+                  ] as const
+                ).map(([key, label]) => (
+                  <div className="form-field" key={key}>
+                    <label htmlFor={`client-${p.id}-${key}`}>{label}</label>
+                    <input
+                      id={`client-${p.id}-${key}`}
+                      value={profile[key]}
+                      required={key === 'full_name'}
+                      onChange={(e) => setProfile({ ...profile, [key]: e.target.value })}
+                    />
+                  </div>
+                ))}
+                <button className="small-button" disabled={busy}>
+                  Kontaktdaten speichern
+                </button>
+              </form>
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+type PrivacyRequest = {
+  id: string;
+  user_id: string;
+  kind: string;
+  status: string;
+  resolution: string | null;
+  created_at: string;
+};
+export function PrivacyManager({ requests }: { requests: PrivacyRequest[] }) {
+  const { busy, run, status } = useAction();
+  const [resolution, setResolution] = useState<Record<string, string>>({});
+  const [confirmation, setConfirmation] = useState<Record<string, string>>({});
+  return (
+    <>
+      {status}
+      <div className="notice">
+        Erasure-Anfragen erfordern eine individuelle Prüfung der betroffenen Daten,
+        Aufbewahrungsfristen und Löschsperren. Eine Entscheidung hier protokolliert die Bearbeitung;
+        sie löscht nicht automatisch ein Konto. Nach Ablauf der geprüften Aufbewahrungsfristen und
+        Bereinigung der Akten kann ein Konto ausdrücklich gelöscht werden.
+      </div>
+      {requests.map((r) => (
+        <section key={r.id} className="section-panel">
+          <h2>
+            {r.kind === 'access' ? 'Auskunft' : 'Löschung'} · {formatDate(r.created_at)}
+          </h2>
+          <p>
+            Nutzer-ID: {r.user_id} · {r.status}
+          </p>
+          {r.resolution && <p>{r.resolution}</p>}
+          {r.status === 'pending' && (
+            <>
+              <div className="form-field" style={{ marginTop: 20 }}>
+                <label htmlFor={`privacy-${r.id}`}>
+                  Prüfergebnis / Antwort / Aufbewahrungsgrund
+                </label>
+                <textarea
+                  id={`privacy-${r.id}`}
+                  value={resolution[r.id] || ''}
+                  onChange={(e) => setResolution({ ...resolution, [r.id]: e.target.value })}
+                />
+              </div>
+              <div className="form-actions">
+                <button
+                  className="small-button"
+                  disabled={busy || (resolution[r.id]?.length ?? 0) < 10}
+                  onClick={() =>
+                    void run('privacy', {
+                      id: r.id,
+                      status: 'resolved',
+                      resolution: resolution[r.id],
+                    })
+                  }
+                >
+                  Als bearbeitet dokumentieren
+                </button>
+                <button
+                  className="small-button"
+                  disabled={busy || (resolution[r.id]?.length ?? 0) < 10}
+                  onClick={() =>
+                    void run('privacy', {
+                      id: r.id,
+                      status: 'retained',
+                      resolution: resolution[r.id],
+                    })
+                  }
+                >
+                  Aufbewahrung begründen
+                </button>
+              </div>
+            </>
+          )}
+          {r.kind === 'erasure' && r.status === 'resolved' && r.user_id && (
+            <div className="notice">
+              <p>
+                Endgültige Kontolöschung: nur möglich, wenn keine Akten, Rechnungen,
+                Mitarbeiterrolle oder gebuchten Termine mehr bestehen.
+              </p>
+              <div className="form-field">
+                <label htmlFor={`erase-${r.id}`}>Zur Bestätigung KONTO LÖSCHEN eingeben</label>
+                <input
+                  id={`erase-${r.id}`}
+                  value={confirmation[r.id] || ''}
+                  onChange={(e) => setConfirmation({ ...confirmation, [r.id]: e.target.value })}
+                />
+              </div>
+              <button
+                className="small-button"
+                disabled={busy || confirmation[r.id] !== 'KONTO LÖSCHEN'}
+                onClick={() =>
+                  void run('erase-account', { requestId: r.id, confirmation: confirmation[r.id] })
+                }
+              >
+                Konto endgültig löschen
+              </button>
+            </div>
+          )}
+        </section>
+      ))}
+    </>
+  );
+}
