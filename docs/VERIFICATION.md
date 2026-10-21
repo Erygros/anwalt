@@ -2,6 +2,8 @@
 
 Stand: 21. Oktober 2026. Die Tests verwenden ausschließlich synthetische Testdatensätze und keine veröffentlichten Kanzleiidentitäten.
 
+Letzter lokaler Prüflauf: 17 Datenbank-/Validierungstests und 3 Scanner-Adaptertests bestanden; TypeScript, Formatprüfung und Produktionsbuild erfolgreich. Die HTTP-Prüfung umfasst 20 öffentliche Routen sowie Zugriffssperren, 404, Origin-Schutz, Cron und Webhook-Schutz. Die benötigten Produktivvariablen sind noch nicht gesetzt; `check:env` weist sie erwartungsgemäß als fehlend aus.
+
 ## Automatisiert
 
 `npm test` führt echte PostgreSQL-Migrationen und RLS-Abfragen in einem isolierten PGlite-PostgreSQL-System aus. Nur die von Supabase bereitgestellten Auth-/Storage-Grundtabellen und JWT-Hilfsfunktionen werden für diesen Test nachgebildet; die Anwendungsmigrationen, Constraints und Berechtigungen werden unverändert angewendet.

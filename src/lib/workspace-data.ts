@@ -22,6 +22,8 @@ export async function loadCase(id: string) {
       .eq('case_id', id)
       .order('created_at'),
   ]);
+  if (messages.error || documents.error || ('error' in tasks && tasks.error) || events.error)
+    throw new Error('DATA_UNAVAILABLE');
   let members: { user_id: string; role: string; assigned: boolean }[] = [];
   if (ctx.role === 'admin') {
     const [staff, assigned] = await Promise.all([

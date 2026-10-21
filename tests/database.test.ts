@@ -347,18 +347,16 @@ test('retention claim cannot purge active cases and locks changes during deletio
     /PURGE_IN_PROGRESS/,
   );
 });
-test('Data API hook records only the actor and table, without confidential queries', async () => {
+test('Data API hook works inside PostgREST read-only transactions without writing tables', async () => {
   await database.exec('reset role');
   await database.query(
     "select set_config('request.method','GET',false),set_config('request.path','/cases',false)",
   );
+  const before = await database.query<{ count: string }>('select count(*) from public.audit_logs');
   await asUser(ids.a, 'aal2');
+  await database.exec('begin read only');
   await database.query('select public.audit_api_access()');
-  await database.exec('reset role');
-  const logs = await database.query<{ actor_id: string; entity_type: string; entity_id: null }>(
-    "select actor_id,entity_type,entity_id from public.audit_logs where action='data_api_read' order by id desc limit 1",
-  );
-  assert.equal(logs.rows[0].actor_id, ids.a);
-  assert.equal(logs.rows[0].entity_type, 'cases');
-  assert.equal(logs.rows[0].entity_id, null);
+  await database.exec('commit;reset role');
+  const after = await database.query<{ count: string }>('select count(*) from public.audit_logs');
+  assert.equal(before.rows[0].count, after.rows[0].count);
 });

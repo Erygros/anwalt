@@ -240,7 +240,12 @@ export async function privacyRequest(input: unknown) {
   return { ok: true };
 }
 export async function exportData() {
-  const { user, client } = await requireUser();
+  const { user, client, role } = await requireUser();
+  if (role)
+    throw new ApiError(
+      403,
+      'Mitarbeiterauskünfte werden individuell bearbeitet. Der Selbstauskunftsexport ist Mandantenkonten vorbehalten.',
+    );
   await rateLimit(user.id, 'export', 3, 86400);
   await audit(user.id, 'export', 'profile', user.id);
   const [profile, cases, messages, documents, appointments, invoices] = await Promise.all([

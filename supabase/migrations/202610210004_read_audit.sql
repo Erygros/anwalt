@@ -1,4 +1,5 @@
--- Capture authorized Data API reads, including reads made outside Next.js.
+-- Capture Data API reads in PostgreSQL logs, including reads outside Next.js.
+-- GET/HEAD transactions are READ ONLY in PostgREST: never INSERT from this hook.
 -- Never record query strings, request bodies, IP addresses or case facts.
 create function public.audit_api_access() returns void language plpgsql security definer set search_path='' as $$
 declare entity text; begin
@@ -6,7 +7,7 @@ declare entity text; begin
  if current_setting('request.method',true) not in ('GET','HEAD') then return; end if;
  entity:=split_part(trim(leading '/' from current_setting('request.path',true)),'/',1);
  if entity=any(array['profiles','cases','messages','documents','appointments','tasks','case_events','invoices','notifications','privacy_requests']) then
-   insert into public.audit_logs(actor_id,action,entity_type) values(auth.uid(),'data_api_read',entity);
+   raise log '%', json_build_object('action','data_api_read','actor_id',auth.uid(),'entity_type',entity);
  end if;
 end $$;
 revoke execute on function public.audit_api_access() from public,anon;

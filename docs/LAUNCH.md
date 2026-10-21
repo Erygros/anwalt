@@ -15,6 +15,8 @@ Im Auth-Dashboard:
 - TOTP-Einrichtung und Verifizierung aktivieren. Auth-Rate-Limits kontrollieren und bei öffentlicher Registrierung den von Supabase unterstützten Bot-Schutz ergänzen, falls durch die Bedrohungslage erforderlich.
 - JWT- und Sitzungsdauer mit der Kanzlei abstimmen, z. B. kurze Zugriffstokens, Inaktivitätsbegrenzung und Sitzungswiderruf bei Mitarbeiterwechsel.
 
+Die Uploadgrenze beträgt 3 MB je Datei, damit der serverseitig geprüfte Multipart-Upload innerhalb der Vercel-Requestgrenze bleibt. Größere Unterlagen vorab in sinnvoll getrennte PDFs aufteilen und keine externen ungeschützten Links als Ersatz verwenden.
+
 Der private Bucket `case-documents` wird durch die Migration angelegt. **Keine öffentlichen Policies ergänzen.** Für Storage existieren absichtlich keine direkten Clientberechtigungen. Upload und Download erfolgen ausschließlich über die autorisierende Anwendung.
 
 ## 2. Ersten Administrator anlegen

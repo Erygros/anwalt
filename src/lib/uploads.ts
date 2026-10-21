@@ -1,6 +1,6 @@
 import 'server-only';
 import { createHash, randomUUID } from 'node:crypto';
-import { ApiError, audit, rateLimit, requireCase } from './security';
+import { ApiError, audit, rateLimit, requireCase, requireUser, readBoundedBody } from './security';
 import { adminDb } from './supabase/server';
 import { detectMime } from './file-validation';
 export async function uploadDocument(request: Request) {
@@ -9,10 +9,14 @@ export async function uploadDocument(request: Request) {
       503,
       'Der sichere Dokumentenupload ist noch nicht freigeschaltet. Sie können die Anfrage ohne Unterlagen senden.',
     );
-  const size = Number(request.headers.get('content-length') || 0);
-  if (size > 11 * 1024 * 1024)
-    throw new ApiError(413, 'Eine Datei darf höchstens 10 MB groß sein.');
-  const form = await request.formData();
+  const actor = await requireUser();
+  await rateLimit(actor.user.id, 'upload', 30);
+  const bounded = await readBoundedBody(request, 4 * 1024 * 1024);
+  const form = await new Request(request.url, {
+    method: 'POST',
+    headers: request.headers,
+    body: new Uint8Array(bounded),
+  }).formData();
   const caseId = form.get('caseId');
   const file = form.get('file');
   if (typeof caseId !== 'string' || !/^[a-f0-9-]{36}$/i.test(caseId) || !(file instanceof File))
@@ -20,9 +24,8 @@ export async function uploadDocument(request: Request) {
   const ctx = await requireCase(caseId);
   if (['declined', 'closed'].includes(ctx.record.status))
     throw new ApiError(409, 'Für diese Akte werden keine neuen Unterlagen angenommen.');
-  await rateLimit(ctx.user.id, 'upload', 30);
-  if (!file.size || file.size > 10 * 1024 * 1024)
-    throw new ApiError(413, 'Eine Datei muss zwischen 1 Byte und 10 MB groß sein.');
+  if (!file.size || file.size > 3 * 1024 * 1024)
+    throw new ApiError(413, 'Eine Datei muss zwischen 1 Byte und 3 MB groß sein.');
   const { count } = await adminDb()
     .from('documents')
     .select('id', { count: 'exact', head: true })
@@ -76,19 +79,17 @@ export async function uploadDocument(request: Request) {
     .from('case-documents')
     .upload(path, bytes, { contentType: mime, upsert: false });
   if (storageError) throw new Error('UPLOAD_FAILED');
-  const { error } = await admin
-    .from('documents')
-    .insert({
-      id,
-      case_id: caseId,
-      uploader_id: ctx.user.id,
-      name: file.name.replace(/[\x00-\x1f<>]/g, '').slice(0, 180),
-      path,
-      mime,
-      size: file.size,
-      sha256,
-      scan_status: 'clean',
-    });
+  const { error } = await admin.from('documents').insert({
+    id,
+    case_id: caseId,
+    uploader_id: ctx.user.id,
+    name: file.name.replace(/[\x00-\x1f<>]/g, '').slice(0, 180),
+    path,
+    mime,
+    size: file.size,
+    sha256,
+    scan_status: 'clean',
+  });
   if (error) {
     await admin.storage.from('case-documents').remove([path]);
     throw new Error('UPLOAD_FAILED');

@@ -43,13 +43,35 @@ export function checkOrigin(request: Request) {
 export async function readJson(request: Request) {
   if (!request.headers.get('content-type')?.startsWith('application/json'))
     throw new ApiError(415, 'JSON wird erwartet.');
-  const text = await request.text();
-  if (Buffer.byteLength(text) > 150000) throw new ApiError(413, 'Die Eingabe ist zu groß.');
+  const text = (await readBoundedBody(request, 150000)).toString('utf8');
   try {
     return JSON.parse(text);
   } catch {
     throw new ApiError(400, 'Die Eingabe konnte nicht gelesen werden.');
   }
+}
+export async function readBoundedBody(request: Request, limit: number): Promise<Buffer> {
+  if (Number(request.headers.get('content-length') || 0) > limit)
+    throw new ApiError(413, 'Die Eingabe ist zu groß.');
+  const reader = request.body?.getReader();
+  if (!reader) return Buffer.alloc(0);
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > limit) {
+        await reader.cancel();
+        throw new ApiError(413, 'Die Eingabe ist zu groß.');
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks, total);
 }
 export async function requireUser() {
   if (!configured()) throw new ApiError(503, 'Der Mandantenbereich ist noch nicht eingerichtet.');
@@ -60,12 +82,14 @@ export async function requireUser() {
   } = await client.auth.getUser();
   if (error || !user || !user.email_confirmed_at)
     throw new ApiError(401, 'Bitte melden Sie sich mit einer bestätigten E-Mail-Adresse an.');
-  const { data: staff } = await adminDb()
+  const { data: staff, error: staffError } = await adminDb()
     .from('staff_members')
     .select('role,active')
     .eq('user_id', user.id)
     .eq('active', true)
     .maybeSingle();
+  if (staffError)
+    throw new ApiError(503, 'Die Berechtigungsprüfung ist vorübergehend nicht verfügbar.');
   const { data: aal, error: aalError } = await client.auth.mfa.getAuthenticatorAssuranceLevel();
   if (aalError || ((staff || aal?.nextLevel === 'aal2') && aal?.currentLevel !== 'aal2'))
     throw new ApiError(403, 'Für dieses Konto ist die Zwei-Faktor-Anmeldung erforderlich.');

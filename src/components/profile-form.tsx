@@ -145,12 +145,7 @@ export function ProfileForm({ initial, email }: { initial: Profile; email: strin
             }}
           >
             {qr && (
-              <img
-                src={`data:image/svg+xml;utf8,${encodeURIComponent(qr)}`}
-                alt="QR-Code für Ihre Authenticator-App"
-                width={200}
-                height={200}
-              />
+              <img src={qr} alt="QR-Code für Ihre Authenticator-App" width={200} height={200} />
             )}
             <div className="form-field">
               <label htmlFor="mfa-code">Aktueller sechsstelliger Code</label>

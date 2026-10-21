@@ -21,7 +21,7 @@ Rollen stammen ausschließlich aus `staff_members`, nie aus Registrierungs-Metad
 
 Alle Anwendungstabellen haben RLS. Browserrollen erhalten nur SELECT-Rechte mit fallbezogenen Policies. Mutationen und RPCs für Buchungen, Übermittlung und Zahlung sind ausschließlich der Serverrolle zugänglich. Vor einer Mutation werden Sitzung, Rolle und Aktenzugriff geprüft. Die Serverrolle darf RLS umgehen und ist daher ein hochsensibles Betriebsgeheimnis.
 
-Der globale PostgREST-Pre-Request-Hook protokolliert Data-API-Lesezugriffe auf sensible Tabellen ohne Queryparameter oder Inhalte. Für konkrete Aktenansichten und Downloads protokolliert die App zusätzlich die Objekt-ID. Infrastrukturzugriffe durch Datenbankadministratoren benötigen die separaten Audit-/Zugriffskontrollen des Betreibers. Supabase-Realtime ist nicht für Mandatsdaten freigegeben.
+Der globale PostgREST-Pre-Request-Hook protokolliert Data-API-Lesezugriffe auf sensible Tabellen als strukturierte PostgreSQL-Logeinträge ohne Queryparameter oder Inhalte. PostgREST führt GET/HEAD in schreibgeschützten Transaktionen aus; der Hook schreibt daher absichtlich nicht in Anwendungstabellen. Für konkrete Aktenansichten und Downloads protokolliert die App zusätzlich die Objekt-ID in audit_logs. Diese Anwendungseinträge sind im Kanzleibereich sichtbar; die Datenbank-Logeinträge müssen über die Betreiber-Logverwaltung zugänglich gemacht und aufbewahrt werden. Infrastrukturzugriffe durch Datenbankadministratoren benötigen die separaten Audit-/Zugriffskontrollen des Betreibers. Supabase-Realtime ist nicht für Mandatsdaten freigegeben.
 
 ## Zustände
 

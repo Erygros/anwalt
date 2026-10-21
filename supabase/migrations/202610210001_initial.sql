@@ -41,7 +41,7 @@ create table public.messages (
 create table public.documents (
   id uuid primary key default gen_random_uuid(), case_id uuid not null references public.cases on delete cascade,
   uploader_id uuid not null references auth.users, name text not null,
-  path text not null unique, mime text not null, size integer not null check(size between 1 and 10485760),
+  path text not null unique, mime text not null, size integer not null check(size between 1 and 3145728),
   sha256 text not null, scan_status text not null check(scan_status='clean'), created_at timestamptz not null default now()
 );
 create table public.availability_slots (
@@ -149,7 +149,7 @@ create index outbox_pending_idx on public.mail_outbox(status,created_at);
 create index audit_created_idx on public.audit_logs(created_at);
 
 insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
-values('case-documents','case-documents',false,10485760,array['application/pdf','image/jpeg','image/png','text/plain']);
+values('case-documents','case-documents',false,3145728,array['application/pdf','image/jpeg','image/png','text/plain']);
 -- Deliberately no storage.objects client policies: server scans before writing;
 -- downloads require server authorization + audit and expire after 60 seconds.
 

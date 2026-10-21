@@ -156,7 +156,7 @@ export function IntakeWizard({ initialPractice, live, uploads, auth }: Props) {
     );
   return (
     <div className="form-shell">
-      <div className="wizard-progress" aria-label={`Schritt ${step + 1} von 6`}>
+      <div className="wizard-progress" role="group" aria-label={`Schritt ${step + 1} von 6`}>
         {['Rechtsgebiet', 'Anliegen', 'Sachverhalt', 'Unterlagen', 'Kontakt', 'Prüfen'].map(
           (s, i) => (
             <div
@@ -292,7 +292,7 @@ export function IntakeWizard({ initialPractice, live, uploads, auth }: Props) {
             {uploads && live ? (
               <div className="file-zone">
                 <Upload size={25} />
-                <p>PDF, JPG, PNG oder TXT · bis 10 MB pro Datei</p>
+                <p>PDF, JPG, PNG oder TXT · bis 3 MB pro Datei</p>
                 <label htmlFor="documents" className="field-label">
                   Unterlage zur Sicherheitsprüfung auswählen
                 </label>

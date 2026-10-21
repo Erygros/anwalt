@@ -255,7 +255,7 @@ export function CaseWorkspace({
         {uploads && !['declined', 'closed'].includes(record.status) ? (
           <div className="file-zone" style={{ marginTop: 20 }}>
             <label htmlFor="case-file">
-              Unterlage hinzufügen · PDF, JPG, PNG, TXT · maximal 10 MB
+              Unterlage hinzufügen · PDF, JPG, PNG, TXT · maximal 3 MB
             </label>
             <input
               type="file"

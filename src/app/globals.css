@@ -2123,3 +2123,10 @@ th {
     color: #917a46;
   }
 }
+
+.wizard-progress > div {
+  color: #606d73;
+}
+.badge.pending {
+  color: #756035;
+}

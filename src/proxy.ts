@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { publicRoutes } from '@/lib/routes';
 export async function proxy(request: NextRequest) {
   const protectedPage = /^\/(portal|admin)(\/|$)/.test(request.nextUrl.pathname);
   const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
@@ -11,6 +12,16 @@ export async function proxy(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);
   requestHeaders.set('Content-Security-Policy', csp);
+  const path = request.nextUrl.pathname.replace(/\/$/, '') || '/';
+  if (!publicRoutes.has(path) && !/^\/(api|auth|portal|admin|_next)(\/|$)/.test(path)) {
+    const missing = NextResponse.rewrite(new URL('/_not-found', request.url), {
+      status: 404,
+      request: { headers: requestHeaders },
+    });
+    missing.headers.set('Content-Security-Policy', csp);
+    missing.headers.set('Cache-Control', 'private, no-store');
+    return missing;
+  }
   function next() {
     const res = NextResponse.next({ request: { headers: requestHeaders } });
     res.headers.set('Content-Security-Policy', csp);
@@ -26,6 +37,7 @@ export async function proxy(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
+      cookieOptions: { secure: process.env.NODE_ENV === 'production', sameSite: 'lax', path: '/' },
       cookies: {
         getAll: () => request.cookies.getAll(),
         setAll(items) {

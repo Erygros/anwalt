@@ -148,7 +148,7 @@ export function AuthForm({ configured, reset = false }: { configured: boolean; r
                 </p>
                 {/* Supabase returns a self-contained SVG QR code. */}
                 <img
-                  src={`data:image/svg+xml;utf8,${encodeURIComponent(qr)}`}
+                  src={qr}
                   width={200}
                   height={200}
                   alt="QR-Code zur Einrichtung des zweiten Faktors"

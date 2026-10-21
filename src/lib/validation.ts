@@ -13,10 +13,7 @@ export const intakeSchema = z.object({
   subject: z.string().trim().min(5).max(180),
   urgency: z.enum(['normal', 'zeitnah', 'dringend']),
   facts: z.string().trim().min(30).max(20000),
-  deadline: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .nullable(),
+  deadline: z.iso.date().nullable(),
   opponent: z.string().trim().min(2).max(1500),
   fullName: z.string().trim().min(3).max(150),
   phone: z.string().trim().max(50),
