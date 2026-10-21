@@ -5,13 +5,14 @@ import { ArrowUpRight } from 'lucide-react';
 import { Button, ContactCta, Eyebrow, FaqList, icons } from '@/components/ui';
 import { commonFaq, practices, processSteps } from '@/lib/content';
 import { getFirm } from '@/lib/settings';
+import { getContent } from '@/lib/cms';
 const titles: Record<string, string> = { rechtsgebiete: 'Die Rechtsgebiete', kanzlei: 'Über die Kanzlei', ablauf: 'So funktioniert die Beratung', kosten: 'Kosten & Vergütung', kontakt: 'Kontakt', faq: 'Häufige Fragen', impressum: 'Impressum', datenschutz: 'Datenschutzerklärung', barrierefreiheit: 'Zugänglichkeit dieser Website' };
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
-  const { slug } = await params; const p = practices.find(p => p.slug === slug);
+  const { slug } = await params; const {practices}=await getContent(); const p = practices.find(p => p.slug === slug);
   return { title: p?.title || titles[slug] || 'Seite nicht gefunden', description: p?.description, alternates: { canonical: `/${slug}` } };
 }
 export default async function ContentPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params; const practice = practices.find(p => p.slug === slug); const firm = await getFirm();
+  const { slug } = await params; const {practices,faq:commonFaq}=await getContent(); const practice = practices.find(p => p.slug === slug); const firm = await getFirm();
   if (!practice && !titles[slug]) notFound();
   if (practice) return <><section className="page-hero"><div className="container"><div className="breadcrumb"><Link href="/">Startseite</Link> / <Link href="/rechtsgebiete">Rechtsgebiete</Link> / {practice.title}</div><Eyebrow>{practice.title} · {practice.tag}</Eyebrow><h1>{practice.lead}</h1><p>{practice.intro}</p><Button href={`/anfrage?gebiet=${practice.slug}`}>Beratung im {practice.title} anfragen</Button></div></section><section className="section"><div className="container content-grid"><div className="prose"><h2>Kommt Ihnen das bekannt vor?</h2><ul>{practice.problems.map(p => <li key={p}>{p}</li>)}</ul><h2>Was anwaltliche Unterstützung leisten kann.</h2><p>{practice.support}</p><h2>Das hilft bei der ersten Einordnung.</h2><p>{practice.prepare}</p><div className="notice">Bitte nennen Sie laufende Fristen mit Datum. Das Absenden einer Anfrage und eine Eingangsbestätigung wahren keine Fristen und begründen kein angenommenes Mandat.</div><h2>So geht es weiter.</h2>{processSteps.map((s, i) => <div key={s.title}><h3>{i + 1}. {s.title}</h3><p>{s.text}</p></div>)}<h2>Fragen zum {practice.title}.</h2><FaqList items={practice.faq} /></div><aside className="side-card"><Eyebrow>Ihr Anliegen</Eyebrow><h3>Erst die Situation.<br />Dann der nächste Schritt.</h3><p>Beschreiben Sie in Ihren Worten, was passiert ist. Das Rechtsgebiet ist bereits vorausgewählt.</p><Button href={`/anfrage?gebiet=${practice.slug}`}>Anfrage beginnen</Button><p className="privacy-meta">Die Übernahme wird persönlich geprüft. Kosten werden vor der Beauftragung geklärt.</p></aside></div></section><ContactCta /></>;
   let intro = ''; let body: React.ReactNode;

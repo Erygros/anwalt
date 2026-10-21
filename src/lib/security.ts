@@ -25,7 +25,8 @@ export async function requireUser() {
   const client=await db(); const { data:{ user },error }=await client.auth.getUser();
   if(error || !user || !user.email_confirmed_at) throw new ApiError(401,'Bitte melden Sie sich mit einer bestätigten E-Mail-Adresse an.');
   const { data:staff }=await adminDb().from('staff_members').select('role,active').eq('user_id',user.id).eq('active',true).maybeSingle();
-  if(staff) { const {data,error:aalError}=await client.auth.mfa.getAuthenticatorAssuranceLevel(); if(aalError || data?.currentLevel!=='aal2') throw new ApiError(403,'Für den Kanzleibereich ist die Zwei-Faktor-Anmeldung erforderlich.'); }
+  const {data:aal,error:aalError}=await client.auth.mfa.getAuthenticatorAssuranceLevel();
+  if(aalError || ((staff || aal?.nextLevel==='aal2') && aal?.currentLevel!=='aal2')) throw new ApiError(403,'Für dieses Konto ist die Zwei-Faktor-Anmeldung erforderlich.');
   return { user,client,role:staff?.role as 'admin'|'lawyer'|'assistant'|undefined };
 }
 export async function requireStaff(allowed: string[]=['admin','lawyer','assistant']) { const ctx=await requireUser(); if(!ctx.role || !allowed.includes(ctx.role)) throw new ApiError(403,'Dafür fehlt die Berechtigung.'); return ctx; }

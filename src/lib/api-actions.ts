@@ -6,13 +6,14 @@ import { ApiError, assertLive, audit, rateLimit, requireCase, requireStaff, requ
 import { bookingSchema, firmSchema, intakeSchema, messageSchema, practiceSchema, profileSchema, uuid } from './validation';
 import { getFirm, readiness } from './settings';
 import { notify, queueMail } from './mail';
+import { contentSchema } from './cms-schema';
 
 export async function getSession() {
   if(!configured()) return {authenticated:false,configured:false};
   const client=await db(); const {data:{user}}=await client.auth.getUser(); if(!user) return {authenticated:false,configured:true};
   const {data:staff}=await adminDb().from('staff_members').select('role').eq('user_id',user.id).eq('active',true).maybeSingle();
   const {data:aal}=await client.auth.mfa.getAuthenticatorAssuranceLevel();
-  return {authenticated:!!user.email_confirmed_at,email:user.email,staff:!!staff,mfaRequired:!!staff && aal?.currentLevel!=='aal2',configured:true};
+  return {authenticated:!!user.email_confirmed_at,email:user.email,staff:!!staff,mfaRequired:(!!staff||aal?.nextLevel==='aal2') && aal?.currentLevel!=='aal2',configured:true};
 }
 export async function getSlots() {
   if(!(await readiness()).live) return {slots:[],live:false,video:false};
@@ -30,13 +31,9 @@ export async function createDraft(input:unknown) {
 }
 export async function submitIntake(input:unknown) {
   await assertLive(); const data=intakeSchema.parse(input); const ctx=await requireUser(); if(ctx.role) throw new ApiError(403,'Bitte verwenden Sie ein Mandantenkonto.'); await rateLimit(ctx.user.id,'intake',5);
-  const admin=adminDb(); let id=data.id;
-  if(id){const owned=await requireCase(id);if(owned.record.client_id!==ctx.user.id || owned.record.status!=='draft') throw new ApiError(409,'Diese Anfrage wurde bereits übermittelt.');}
-  else {const {data:created,error}=await admin.from('cases').insert({client_id:ctx.user.id,practice:data.practice}).select('id').single();if(error)throw error;id=created.id;}
-  const {error:profileError}=await admin.from('profiles').update({full_name:data.fullName,phone:data.phone,company:data.company}).eq('id',ctx.user.id); if(profileError)throw profileError;
-  const {data:record,error}=await admin.from('cases').update({practice:data.practice,subject:data.subject,urgency:data.urgency,facts:data.facts,deadline:data.deadline,opponent:data.opponent,status:'submitted',submitted_at:new Date().toISOString(),updated_at:new Date().toISOString()}).eq('id',id).eq('client_id',ctx.user.id).eq('status','draft').select('id,reference').single(); if(error)throw error;
-  await admin.from('case_events').insert({case_id:record.id,status:'submitted'}); await audit(ctx.user.id,'submit','case',record.id);
-  await queueMail(ctx.user.id,'intake',`intake:${record.id}`,record.reference); await notify(ctx.user.id,'Ihre Anfrage ist eingegangen.',`/portal/akten/${record.id}`);
+  const {data:rows,error}=await adminDb().rpc('submit_intake',{p_user:ctx.user.id,p_draft:data.id||null,p_practice:data.practice,p_subject:data.subject,p_urgency:data.urgency,p_facts:data.facts,p_deadline:data.deadline,p_opponent:data.opponent,p_name:data.fullName,p_phone:data.phone,p_company:data.company});
+  if(error||!rows?.[0])throw new ApiError(409,'Die Anfrage konnte nicht übermittelt werden. Prüfen Sie im Mandantenbereich, ob sie bereits eingegangen ist.');
+  const record=rows[0];
   return {reference:record.reference,id:record.id};
 }
 export async function sendMessage(input:unknown) {
@@ -46,6 +43,7 @@ export async function sendMessage(input:unknown) {
   const {data:row,error}=await adminDb().from('messages').insert({case_id:data.caseId,sender_id:ctx.user.id,body:data.body,internal:data.internal}).select('id').single();if(error)throw error;
   await audit(ctx.user.id,data.internal?'internal_note':'send_message','case',data.caseId);
   if(ctx.role && !data.internal){await queueMail(ctx.record.client_id,'message',`message:${row.id}`);await notify(ctx.record.client_id,'Eine neue Nachricht liegt vor.',`/portal/akten/${data.caseId}`);}
+  if(!ctx.role){const {data:members}=await adminDb().from('case_members').select('user_id').eq('case_id',data.caseId);const {data:admins}=await adminDb().from('staff_members').select('user_id').eq('role','admin').eq('active',true);for(const id of new Set([...(members??[]),...(admins??[])].map(m=>m.user_id)))await queueMail(id,'message',`message:${row.id}:${id}`);}
   return {ok:true};
 }
 export async function bookAppointment(input:unknown) {
@@ -72,6 +70,7 @@ export async function markNotifications() {const {user}=await requireUser();awai
 export async function adminAction(input:unknown) {
   const envelope=z.object({action:z.string(),payload:z.unknown()}).parse(input);const ctx=await requireStaff();await rateLimit(ctx.user.id,'staff',150);const admin=adminDb();
   switch(envelope.action) {
+    case 'content': {if(ctx.role!=='admin')throw new ApiError(403,'Nur die Administration veröffentlicht Seiteninhalte.');const value=contentSchema.parse(envelope.payload);const {error}=await admin.from('settings').upsert({key:'content',value,updated_at:new Date().toISOString()});if(error)throw error;await audit(ctx.user.id,'publish_content','settings','content');break;}
     case 'firm': {if(ctx.role!=='admin')throw new ApiError(403,'Nur die Administration kann Kanzleidaten bearbeiten.');const value=firmSchema.parse(envelope.payload);const {error}=await admin.from('settings').upsert({key:'firm',value,updated_at:new Date().toISOString()});if(error)throw error;await audit(ctx.user.id,'publish_settings','firm','firm');break;}
     case 'conflict': {if(ctx.role==='assistant')throw new ApiError(403,'Die Konfliktprüfung erfordert anwaltliche Freigabe.');const d=z.object({caseId:uuid,result:z.enum(['clear','conflict'])}).parse(envelope.payload);const c=await requireCase(d.caseId);if(!['submitted','conflict_review'].includes(c.record.status))throw new ApiError(409,'Die Anfrage befindet sich nicht in der Eingangsprüfung.');const {error}=await admin.from('cases').update({status:'conflict_review',conflict_checked_at:new Date().toISOString(),conflict_checked_by:ctx.user.id,conflict_result:d.result}).eq('id',d.caseId);if(error)throw error;await audit(ctx.user.id,'conflict_'+d.result,'case',d.caseId);break;}
     case 'status': {if(ctx.role==='assistant')throw new ApiError(403,'Die Mandatsentscheidung erfordert anwaltliche Freigabe.');const d=z.object({caseId:uuid,status:z.enum(['accepted','declined','closed'])}).parse(envelope.payload);const c=await requireCase(d.caseId);if(d.status==='accepted'){await assertLive();if(c.record.status!=='conflict_review'||c.record.conflict_result!=='clear')throw new ApiError(409,'Zuerst muss die Interessenkonfliktprüfung ohne Konflikt abgeschlossen werden.');}
