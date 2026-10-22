@@ -53,12 +53,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <a href="#main" className="skip-link">
           Zum Inhalt
         </a>
-        {!ready.live && (
-          <div className="preview-bar">
-            Vorbereitung des Kanzleistarts · Mandatsannahme und Buchung sind noch nicht
-            freigeschaltet.
-          </div>
-        )}
         <Header brand={firm.brand} />
         <main id="main">{children}</main>
         <Footer firm={firm} />
