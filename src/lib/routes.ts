@@ -1,4 +1,7 @@
+import { BRAND } from './branding';
 export const publicRoutes = new Set([
+  ...Object.values(BRAND.assets),
+  '/manifest.webmanifest',
   '/',
   '/rechtsgebiete',
   '/strafrecht',
@@ -18,7 +21,5 @@ export const publicRoutes = new Set([
   '/mandantenbereich',
   '/robots.txt',
   '/sitemap.xml',
-  '/icon.svg',
-  '/opengraph-image',
   '/_not-found',
 ]);

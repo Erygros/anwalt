@@ -1,19 +1,15 @@
 import Link from 'next/link';
 import type { Firm } from '@/lib/firm';
+import { BrandLogo } from './brand-logo';
+import { BRAND } from '@/lib/branding';
 export function Footer({ firm }: { firm: Firm }) {
   return (
     <footer className="site-footer">
       <div className="container">
         <div className="footer-grid">
           <div className="footer-brand">
-            <Link className="brand" href="/">
-              <span className="brand-mark">
-                d<span>⁄</span>a
-              </span>
-              <span>
-                {firm.brand}
-                <small>RECHT. PERSÖNLICH. DIGITAL.</small>
-              </span>
+            <Link className="brand" href="/" aria-label={`${BRAND.name} – Startseite`}>
+              <BrandLogo light />
             </Link>
             <p>
               Rechtliche Fragen verdienen eine klare Antwort.
@@ -56,7 +52,7 @@ export function Footer({ firm }: { firm: Firm }) {
         </div>
         <div className="footer-bottom">
           <span>
-            © {new Date().getFullYear()} {firm.brand}
+            © {new Date().getFullYear()} {BRAND.name}
           </span>
           <span>
             <Link href="/impressum">Impressum</Link>

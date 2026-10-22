@@ -1,16 +1,16 @@
 import Link from 'next/link';
+import Image from 'next/image';
+import { BRAND } from '@/lib/branding';
 import {
   ArrowUpRight,
   ArrowDown,
-  Check,
-  Fingerprint,
   MessagesSquare,
   CalendarDays,
   FileCheck2,
   LockKeyhole,
 } from 'lucide-react';
 import { Button, Eyebrow, FaqList, ContactCta, icons } from '@/components/ui';
-import { practices, commonFaq, processSteps } from '@/lib/content';
+import { processSteps } from '@/lib/content';
 import { getFirm } from '@/lib/settings';
 import { getContent } from '@/lib/cms';
 export const dynamic = 'force-dynamic';
@@ -21,6 +21,10 @@ export default async function Home() {
   return (
     <>
       <section className="hero">
+        <div className="hero-background" aria-hidden="true">
+          <Image src={BRAND.assets.hero} alt="" fill sizes="100vw" preload />
+          <div className="hero-overlay" />
+        </div>
         <div className="container hero-grid">
           <div className="hero-copy">
             <Eyebrow>Die digitale Kanzlei für Ihre Rechtsfragen</Eyebrow>
@@ -43,61 +47,6 @@ export default async function Home() {
               <span className="small-dot" />
               Für Privatpersonen und Unternehmen · Bundesweit anfragen
             </p>
-          </div>
-          <div
-            className="hero-art"
-            role="img"
-            aria-label="Von Ihrer Anfrage über die persönliche Prüfung zum nächsten Schritt"
-          >
-            <div className="art-top">
-              <span>DER DIGITALE WEG ZU IHREM RECHT</span>
-              <Fingerprint size={28} strokeWidth={1} />
-            </div>
-            <div className="art-orbit orbit-one" />
-            <div className="art-orbit orbit-two" />
-            <div className="dossier-back" />
-            <div className="dossier">
-              <div className="dossier-label">
-                <span>IHRE ANGELEGENHEIT</span>
-                <LockKeyhole size={14} />
-              </div>
-              <span className="dossier-title">
-                Ein Anliegen.
-                <br />
-                Ein klarer Weg.
-              </span>
-              <div className="document-line" />
-              <div className="document-line short" />
-              <div className="dossier-row">
-                <span className="dossier-check">
-                  <Check size={13} />
-                </span>
-                <span>Verstehen, worum es geht.</span>
-              </div>
-              <div className="dossier-row">
-                <span className="dossier-check">
-                  <Check size={13} />
-                </span>
-                <span>Möglichkeiten einordnen.</span>
-              </div>
-              <div className="dossier-row">
-                <span className="dossier-check">
-                  <Check size={13} />
-                </span>
-                <span>Den nächsten Schritt kennen.</span>
-              </div>
-              <div className="dossier-bottom">
-                <span>PERSÖNLICH BEGLEITET</span>
-                <span className="tiny-brand">d/a</span>
-              </div>
-            </div>
-            <div className="art-caption">
-              <span className="caption-rule" />
-              Recht braucht Vertrauen.
-              <br />
-              Auch ohne gemeinsamen Schreibtisch.
-            </div>
-            <div className="art-index">ANFRAGE → PRÜFUNG → KLARHEIT</div>
           </div>
         </div>
       </section>
@@ -257,7 +206,14 @@ export default async function Home() {
       <section className="section firm-teaser">
         <div className="container firm-teaser-grid">
           <div className="statement">
-            <span className="statement-mark">§</span>
+            <Image
+              className="statement-signet"
+              src={BRAND.assets.signetLight}
+              alt=""
+              width={248}
+              height={260}
+              aria-hidden="true"
+            />
             <p>
               Gute Beratung beginnt
               <br />

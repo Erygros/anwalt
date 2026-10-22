@@ -43,7 +43,9 @@ before(async () => {
     try {
       const r = await fetch(`http://127.0.0.1:${port}/scan`);
       if (r.status === 401) return;
-    } catch {}
+    } catch {
+      // The scanner can still be starting; retry until the bounded startup deadline.
+    }
     await delay(50);
   }
   throw new Error('Scanner did not start');

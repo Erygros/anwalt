@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { timingSafeEqual } from 'node:crypto';
 import { adminDb, configured } from '@/lib/supabase/server';
-import { flushMail, queueMail, notify } from '@/lib/mail';
+import { flushMail, queueMail } from '@/lib/mail';
 import { audit } from '@/lib/security';
 export const runtime = 'nodejs';
 export const maxDuration = 60;

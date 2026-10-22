@@ -239,7 +239,7 @@ export function CaseWorkspace({
               <li key={d.id}>
                 <span>
                   {d.name}
-                  <small style={{ display: 'block', color: '#64717a' }}>
+                  <small style={{ display: 'block', color: 'var(--muted)' }}>
                     {Math.ceil(d.size / 1024)} KB · {formatDate(d.created_at)}
                   </small>
                 </span>

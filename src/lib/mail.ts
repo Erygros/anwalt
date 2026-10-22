@@ -1,5 +1,6 @@
 import 'server-only';
 import { adminDb } from './supabase/server';
+import { BRAND } from './branding';
 export async function queueMail(
   userId: string,
   kind: string,
@@ -55,9 +56,8 @@ export async function flushMail(limit = 25) {
       body: JSON.stringify({
         from: process.env.MAIL_FROM,
         to: [user.email],
-        subject:
-          item.kind === 'intake' ? 'Eingang Ihrer Anfrage' : 'Mitteilung aus dem Mandantenbereich',
-        text: `${text}\n\n${process.env.NEXT_PUBLIC_SITE_URL}/portal`,
+        subject: `${BRAND.name} · ${item.kind === 'intake' ? 'Eingang Ihrer Anfrage' : 'Mitteilung aus dem Mandantenbereich'}`,
+        text: `${text}\n\n${BRAND.name}\n${process.env.NEXT_PUBLIC_SITE_URL}/portal`,
       }),
       signal: AbortSignal.timeout(5000),
     }).catch(() => null);

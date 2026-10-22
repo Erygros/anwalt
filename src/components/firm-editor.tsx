@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { post } from '@/lib/client-api';
 import type { Firm } from '@/lib/firm';
 import { isFirmComplete } from '@/lib/firm';
+import { BRAND } from '@/lib/branding';
 const groups: Record<string, [keyof Firm, string][]> = {
   Kanzlei: [
     ['brand', 'Projekt- / Markenname'],
@@ -33,7 +34,7 @@ const groups: Record<string, [keyof Firm, string][]> = {
   ],
 };
 export function FirmEditor({ initial }: { initial: Firm }) {
-  const [firm, setFirm] = useState(initial);
+  const [firm, setFirm] = useState({ ...initial, brand: BRAND.name as string });
   const [tab, setTab] = useState('Kanzlei');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
@@ -106,6 +107,7 @@ export function FirmEditor({ initial }: { initial: Firm }) {
               id={`firm-${key}`}
               value={String(firm[key])}
               type={key === 'email' ? 'email' : 'text'}
+              readOnly={key === 'brand'}
               onChange={(e) => setFirm({ ...firm, [key]: e.target.value })}
             />
           )}

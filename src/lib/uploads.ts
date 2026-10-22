@@ -83,6 +83,7 @@ export async function uploadDocument(request: Request) {
     id,
     case_id: caseId,
     uploader_id: ctx.user.id,
+    // eslint-disable-next-line no-control-regex -- Deliberately strip control characters from untrusted filenames.
     name: file.name.replace(/[\x00-\x1f<>]/g, '').slice(0, 180),
     path,
     mime,

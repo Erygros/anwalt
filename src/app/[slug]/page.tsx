@@ -3,9 +3,10 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ArrowUpRight } from 'lucide-react';
 import { Button, ContactCta, Eyebrow, FaqList, icons } from '@/components/ui';
-import { commonFaq, practices, processSteps } from '@/lib/content';
+import { practices, processSteps } from '@/lib/content';
 import { getFirm } from '@/lib/settings';
 import { getContent } from '@/lib/cms';
+import { BRAND } from '@/lib/branding';
 const titles: Record<string, string> = {
   rechtsgebiete: 'Die Rechtsgebiete',
   kanzlei: 'Über die Kanzlei',
@@ -110,7 +111,7 @@ export default async function ContentPage({ params }: { params: Promise<{ slug: 
         <ContactCta />
       </>
     );
-  let intro = '';
+  let intro: string;
   let body: React.ReactNode;
   switch (slug) {
     case 'rechtsgebiete':
@@ -471,7 +472,7 @@ export default async function ContentPage({ params }: { params: Promise<{ slug: 
           <div className="breadcrumb">
             <Link href="/">Startseite</Link> / {titles[slug]}
           </div>
-          <Eyebrow>Digitaler Anwalt</Eyebrow>
+          <Eyebrow>{BRAND.name}</Eyebrow>
           <h1>{titles[slug]}</h1>
           <p>{intro}</p>
         </div>

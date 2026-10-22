@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     await assertLive();
     if (!(await readiness()).payments)
       throw new ApiError(503, 'Onlinezahlungen sind noch nicht freigeschaltet.');
-    const { invoiceId, accepted } = z
+    const { invoiceId } = z
       .object({ invoiceId: z.string().uuid(), accepted: z.literal(true) })
       .parse(await readJson(request));
     const ctx = await requireUser();

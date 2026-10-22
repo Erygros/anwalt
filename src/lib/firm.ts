@@ -1,6 +1,7 @@
 // Verified information only. Admin-managed published configuration overrides these defaults.
+import { BRAND } from './branding';
 export const defaultFirm = {
-  brand: 'Digitaler Anwalt',
+  brand: BRAND.name as string,
   legalName: '',
   address: '',
   email: '',

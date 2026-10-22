@@ -3,7 +3,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useState } from 'react';
 import { ArrowUpRight, Menu, X, LockKeyhole } from 'lucide-react';
-export function Header({ brand }: { brand: string }) {
+import { BrandLogo } from './brand-logo';
+import { BRAND } from '@/lib/branding';
+export function Header() {
   const [open, setOpen] = useState(false);
   const path = usePathname();
   const links = [
@@ -21,15 +23,9 @@ export function Header({ brand }: { brand: string }) {
           className="brand"
           href="/"
           onClick={() => setOpen(false)}
-          aria-label={`${brand} – Startseite`}
+          aria-label={`${BRAND.name} – Startseite`}
         >
-          <span className="brand-mark" aria-hidden="true">
-            d<span>⁄</span>a
-          </span>
-          <span>
-            {brand}
-            <small>RECHT. PERSÖNLICH. DIGITAL.</small>
-          </span>
+          <BrandLogo preload />
         </Link>
         <button
           className="menu-toggle"

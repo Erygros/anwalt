@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { BRAND } from '../src/lib/branding.ts';
 const base = process.env.TEST_BASE_URL || 'http://localhost:3000';
 const paths = [
   '/',
@@ -20,14 +21,31 @@ const paths = [
   '/mandantenbereich',
   '/robots.txt',
   '/sitemap.xml',
-  '/opengraph-image',
+  '/branding/rechtavo-og.png',
+  '/manifest.webmanifest',
+  '/favicon.ico',
+  '/favicon-32x32.png',
+  '/apple-touch-icon.png',
 ];
 for (const path of paths) {
   const r = await fetch(base + path);
   assert.equal(r.status, 200, path);
-  if (!path.includes('opengraph')) assert.ok(r.headers.get('x-content-type-options') === 'nosniff');
+  if (r.headers.get('content-type')?.includes('text/html')) {
+    const page = await r.text();
+    assert.ok(page.includes(BRAND.name), `Brand missing: ${path}`);
+    assert.ok(!page.includes('Digitaler Anwalt'), `Stale brand: ${path}`);
+    assert.ok(!page.includes('class="brand-mark"'), `Stale monogram: ${path}`);
+  }
+  if (!path.includes('rechtavo-og'))
+    assert.ok(r.headers.get('x-content-type-options') === 'nosniff');
   console.log(`200 ${path}`);
 }
+for (const path of Object.values(BRAND.assets)) {
+  const r = await fetch(base + path);
+  assert.equal(r.status, 200, path);
+  assert.ok(!r.headers.get('content-type')?.includes('text/html'), `Image returned HTML: ${path}`);
+}
+console.log('OK all RECHTAVO assets');
 for (const path of ['/portal', '/admin', '/portal/akten', '/admin/einstellungen']) {
   const r = await fetch(base + path, { redirect: 'manual' });
   assert.equal(r.status, 307, path);

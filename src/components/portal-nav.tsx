@@ -2,6 +2,8 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { browserDb } from '@/lib/supabase/client';
+import Image from 'next/image';
+import { BRAND } from '@/lib/branding';
 export function PortalNav({ staff = false, admin = false }: { staff?: boolean; admin?: boolean }) {
   const path = usePathname();
   const router = useRouter();
@@ -33,6 +35,10 @@ export function PortalNav({ staff = false, admin = false }: { staff?: boolean; a
       ];
   return (
     <aside className="portal-sidebar">
+      <div className="workspace-brand">
+        <Image src={BRAND.assets.signetDark} width={32} height={34} alt="" />
+        <span>{BRAND.name}</span>
+      </div>
       <h2>{staff ? 'Kanzleibereich' : 'Mein Bereich'}</h2>
       {links.map(([title, p]) => (
         <Link

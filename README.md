@@ -1,6 +1,6 @@
-# Digitaler Anwalt
+# RECHTAVO
 
-Eigenständige deutschsprachige Kanzleiwebsite mit Next.js App Router, TypeScript, Tailwind CSS und Supabase. Dunkelblau, Papierweiß und zurückhaltendes Gold; lokal ausgelieferte Schriftarten und eine in CSS gestaltete Aktenillustration. Keine Stockfotos, Bewertungen, erfundenen Kanzleidaten oder vorgetäuschten Termine.
+Eigenständige deutschsprachige Kanzleiwebsite mit Next.js App Router, TypeScript, Tailwind CSS und Supabase. Finales RECHTAVO-Branding in Navy, Weiß und Silber; lokal ausgelieferte Schriftarten sowie originalgetreu freigestellte Logos und optimierte Banner aus den bereitgestellten Gemini-Dateien. Keine Stockfotos, Bewertungen, erfundenen Kanzleidaten oder vorgetäuschten Termine.
 
 ## Starten
 
@@ -15,6 +15,7 @@ Die Website läuft unter `http://localhost:3000`. Ohne Zugangsdaten funktioniert
 npm test
 npm run test:scanner
 npm run typecheck
+npm run lint
 npm run build
 npm run check:env
 ```
@@ -40,6 +41,7 @@ npm run check:env
 - [Architektur und Berechtigungen](docs/ARCHITECTURE.md)
 - [Betrieb, Aufbewahrung und Wiederherstellung](docs/OPERATIONS.md)
 - [Durchgeführte Prüfungen und Prüfgrenzen](docs/VERIFICATION.md)
+- [RECHTAVO-Assets, Bildaufbereitung und Branding](docs/BRANDING.md)
 
 Noch nicht eingerichtet sind die konkrete Kanzleiidentität, Supabase, Versand, Scanner, Stripe, Videoanbieter und ein Vercel-Projekt. Es wurden keine externen Ressourcen oder kostenpflichtigen Konten angelegt. Die Software schaltet unkonfigurierte Funktionen nicht als aktiv frei. Ein produktiver Start setzt die im Einrichtungsdokument genannten Integrationsprüfungen und die fachliche Freigabe der tatsächlichen Kanzlei voraus.
 

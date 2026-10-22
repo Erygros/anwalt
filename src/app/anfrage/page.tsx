@@ -24,7 +24,7 @@ export default async function Inquiry({
           </p>
         </div>
       </section>
-      <section className="section" style={{ background: '#fafbf8' }}>
+      <section className="section" style={{ background: 'var(--paper)' }}>
         <div className="container">
           <IntakeWizard
             initialPractice={

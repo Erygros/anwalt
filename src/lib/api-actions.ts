@@ -1,6 +1,5 @@
 import 'server-only';
 import { z } from 'zod';
-import { randomUUID } from 'node:crypto';
 import { adminDb, db, configured } from './supabase/server';
 import {
   ApiError,
@@ -76,7 +75,7 @@ export async function getSlots() {
   return {
     slots: (slots ?? [])
       .filter((s) => !taken.has(s.id) && active.has(s.staff_id))
-      .map(({ staff_id, ...s }) => ({
+      .map(({ staff_id: _staffId, ...s }) => ({
         ...s,
         modes: process.env.VIDEO_PROVIDER_HOST
           ? s.modes
